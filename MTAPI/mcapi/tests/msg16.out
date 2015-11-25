@@ -1,0 +1,22 @@
+ERROR mca_set_debug_level : This library was built without debug support.
+  If you want to enable debugging, re-build with the --enable-debug option.
+In parent, pid=18069
+In child, pid = 18089
+Parent Process INITIALIZE DONE
+Parent Process CREATE RECV ENDPT DONE
+Parent Process CREATE SEND ENDPT DONE
+Parent Process BLOCKING SEND DONE
+PARENT received: //CHILD: Guten tag MCAPI from ep:1 to ep:0 :256 
+Parent Process BLOCKING RECV DONE
+PARENT DONE
+
+PASSED
+Child Process INITIALIZE DONE
+Child Process CREATE RECV ENDPT DONE
+Child Process CREATE SEND ENDPT DONE
+Child Process BLOCKING SEND DONE
+CHILD received: //PARENT: Guten tag MCAPI from ep:257 to ep:256 
+Child Process BLOCKING RECV DONE
+CHILD DONE
+
+PASSED

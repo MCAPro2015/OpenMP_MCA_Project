@@ -1,0 +1,16 @@
+ERROR mca_set_debug_level : This library was built without debug support.
+  If you want to enable debugging, re-build with the --enable-debug option.
+MCA_MAX_NODES=16, MCA_MAX_DOMAINS=2, node3 NUM_THREADS=3
+testing MCA_MAX_DOMAINS...
+run_thread (t=0)...
+run_thread (t=1)...
+mrapi_initialize
+mrapi_initialize
+run_thread (t=2)...
+MRAPI VERSION=FSL 0.9.3.4
+MRAPI VERSION=FSL 0.9.3.4
+done=1
+done=2
+mrapi_initialize
+init failed (we expected this for one thread) t=2 status=UNKNOWN ERROR
+   Test PASSED

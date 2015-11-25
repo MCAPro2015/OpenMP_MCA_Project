@@ -1,0 +1,443 @@
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sched.h>
+#include "mcapi.h"
+//#include "mrapi.h"
+#include "mutex.h"
+#include "mtapi.h"
+#include "queue.h"
+#include "linklist.h"
+#include "mca_config.h"
+
+#define TLS __thread
+#define MAX_LOCAL_ACTION 4
+#define NUM_JOB 100
+#define NUM_THREAD 0
+
+/**
+ * Node information structure. 
+ */
+typedef struct {
+	mtapi_domain_t domain;
+	mtapi_node_t node;
+	mcapi_port_t req_send_port;
+	mcapi_port_t lst_recv_port;
+	unsigned num_actions;
+	const mtapi_action_id_t *actions;
+} mtapiRT_NodeInfo_t;
+
+extern const mtapiRT_NodeInfo_t NODE_INFOS[];
+
+typedef enum {
+	MTAPIRT_ACTION_NULL = 0,
+	MTAPIRT_ACTION_INITIALIZED,
+	MTAPIRT_ACTION_DELETED,
+	MTAPIRT_ACTION_CREATED,
+	MTAPIRT_ACTION_DISABLED,
+	MTAPIRT_ACTION_ENABLE
+} mtapiRT_action_status_t;
+
+typedef enum {
+	MTAPIRT_ACTION_LOCAL = 0,
+	MTAPIRT_ACTION_REMOTE
+} mtapiRT_location_type_t;
+
+typedef enum {
+	MTAPIRT_MSG_SYNC = 0,
+	MTAPIRT_MSG_ACK,
+	MTAPIRT_MSG_NACK,
+	MTAPIRT_MSG_GET_ACTION,
+	MTAPIRT_MSG_START_TASK,
+	MTAPIRT_MSG_CANCEL_TASK,
+	MTAPIRT_MSG_COMPLETE_TASK,
+	MTAPIRT_MSG_WAIT_TASK,
+	MTAPIRT_MSG_UPDATE_ACTION,
+	MTAPIRT_MSG_UPDATE_ACTION_2,
+	MTAPIRT_MSG_CREATE_ACTION,
+	MTAPIRT_MSG_DELETE_ACTION,
+	MTAPIRT_MSG_DISABLE_ACTION,
+	MTAPIRT_MSG_ENABLE_ACTION
+} mtapiRT_MessageType_t;
+/**
+ * Inter-node message structure.
+ */
+typedef struct {
+	mtapiRT_MessageType_t type;
+//	mtapi_node_t sender;
+	mtapi_domain_t sender_domain;
+	mtapi_node_t sender_node;
+	mcapi_port_t port;
+	char * buffer;
+	mtapi_uint_t buffer_size;
+} mtapiRT_Message_t;
+
+/**
+ * Action information structure.
+ */
+typedef struct mtapiRT_ActionInfo {
+	mtapiRT_action_status_t status;
+	mtapi_job_id_t jobID;
+	union location_t {
+		mtapi_action_function_t fptr;
+		int init_node;
+	} location;
+	MTAPI_IN void * local_data;
+	mtapi_size_t local_data_size;
+	MTAPI_IN mtapi_action_attributes_t * attributes;
+	struct mtapiRT_ActionInfo * next;
+} mtapiRT_ActionInfo_t;
+
+/**
+ * Action updates information structure.
+ */
+typedef struct mtapiRT_ActionUpdate {
+	unsigned init_node;
+	mtapi_job_id_t job[MAX_LOCAL_ACTION];
+	unsigned num_created_action;
+} mtapiRT_ActionUpdate_t;
+
+/**
+ * Job information structure.
+ */
+typedef struct {
+	mtapi_job_id_t job_id;
+	mtapiRT_ActionInfo_t *actionList;
+} mtapiRT_JobInfo_t;
+
+/**
+ * Queue information structure.
+ */
+typedef struct mtapiRT_QueueInfo {
+	MTAPI_IN mtapi_queue_attributes_t * attributes;
+	mtapiRT_JobInfo_t * job;
+	mtapi_boolean_t avail;
+	unsigned internal_queue_id;
+	unsigned external_queue_id;
+	queue_t * seq_task_queue;
+	mtapiRT_ActionInfo_t *action;
+	mutex_t mutex;
+}mtapiRT_QueueInfo_t;
+
+/**
+ * Task information structure.
+ */
+
+typedef struct mtapiRT_TaskInfo {
+	mtapi_task_id_t task_id;
+	mtapiRT_ActionInfo_t * action;
+	void * arguments;
+	mtapi_size_t arguments_size;
+	MTAPI_OUT void *result_buffer;
+	size_t result_size;
+	MTAPI_IN mtapi_task_attributes_t * attributes;
+	mtapi_task_context_t *context;
+	
+	struct mtapiRT_TaskInfo * next;
+	int numOfChild;
+	struct mtapiRT_TaskInfo * parent;
+} mtapiRT_TaskInfo_t;
+
+/**
+ * Remote task information structure
+ */
+
+typedef struct mtapiRT_RemoteTaskInfo {
+	unsigned node_id;
+	mtapi_task_id_t task_id;
+	mtapi_job_id_t job_id;
+	mtapi_size_t arguments_size;
+	MTAPI_OUT void *result_buffer;
+	size_t result_size;
+} mtapiRT_RemoteTaskInfo_t;
+
+
+
+/** global variables */
+
+pthread_mutex_t taskListMutex;
+mtapiRT_TaskInfo_t * taskListHead;
+mtapiRT_TaskInfo_t * taskListTail;
+mtapiRT_JobInfo_t jobList[NUM_JOB];
+
+/** internal function */
+
+void * thread_func(void *);
+int InsertTaskAtTail(mtapiRT_TaskInfo_t *);
+mtapiRT_TaskInfo_t * GetTaskFromHead();
+void ProcessTask(mtapiRT_TaskInfo_t *);
+
+/************************************************************
+	APIs
+  **********************************************************/
+
+mtapi_boolean_t mtapiRT_nodeInitialized(mtapi_status_t * status);
+
+mtapi_domain_t mtapiRT_getDomainId(mtapi_status_t * status);
+
+mtapi_node_t mtapiRT_getNodeId(mtapi_status_t * status);
+
+void mtapiRT_initialize(MTAPI_IN mtapi_domain_t,
+		  	MTAPI_IN mtapi_node_t,
+			mtapi_node_attributes_t *,
+		   	MTAPI_OUT mtapi_info_t *,
+		    	mtapi_status_t *);
+
+mtapiRT_ActionInfo_t * mtapiRT_createAction (
+			MTAPI_IN mtapi_job_id_t,
+			MTAPI_IN mtapi_action_function_t function,
+			MTAPI_IN void * node_local_data,
+			MTAPI_IN mtapi_size_t node_local_data_size,
+			MTAPI_IN mtapi_action_attributes_t * attributes,
+			MTAPI_OUT mtapi_status_t * status
+		);
+void mtapiRT_deleteAction (
+		mtapiRT_ActionInfo_t *,
+		mtapi_timeout_t,
+		mtapi_status_t *
+		);
+
+void mtapiRT_disableAction (
+		mtapiRT_ActionInfo_t *,
+		mtapi_timeout_t,
+		mtapi_status_t *
+		);
+
+void mtapiRT_enableAction (
+		mtapiRT_ActionInfo_t *,
+		mtapi_timeout_t,
+		mtapi_status_t *
+		);
+
+mtapiRT_ActionInfo_t * mtapiRT_getBestAction(mtapiRT_JobInfo_t *, mtapi_status_t *);
+mtapiRT_ActionInfo_t * mtapiRT_getBestActionQueue(mtapiRT_QueueInfo_t *, mtapi_status_t *);
+
+mtapiRT_TaskInfo_t * mtapiRT_startLocalTask (
+		int,
+		unsigned,
+		MTAPI_IN mtapi_task_id_t,
+		mtapiRT_ActionInfo_t *,
+		MTAPI_IN void *,
+		MTAPI_IN mtapi_size_t,
+		MTAPI_OUT void *,
+		MTAPI_IN mtapi_size_t,
+		MTAPI_IN mtapi_task_attributes_t *,
+		MTAPI_OUT mtapi_status_t *);
+
+mtapiRT_TaskInfo_t * mtapiRT_startRemoteTask (
+		MTAPI_IN mtapi_task_id_t,
+		mtapiRT_ActionInfo_t *,
+		MTAPI_IN void *,
+		MTAPI_IN mtapi_size_t,
+		MTAPI_OUT void *,
+		MTAPI_IN mtapi_size_t,
+		MTAPI_IN mtapi_task_attributes_t *,
+		MTAPI_OUT mtapi_status_t *);
+
+mtapiRT_TaskInfo_t * mtapiRT_startLocalTaskQueue (
+		int,
+		mtapiRT_QueueInfo_t *,
+		MTAPI_IN mtapi_task_id_t,
+		mtapiRT_ActionInfo_t *,
+		MTAPI_IN void *,
+		MTAPI_IN mtapi_size_t,
+		MTAPI_OUT void *,
+		MTAPI_IN mtapi_size_t,
+		MTAPI_IN mtapi_task_attributes_t *,
+		MTAPI_OUT mtapi_status_t *);
+
+mtapiRT_TaskInfo_t * mtapiRT_startRemoteTaskQueue (
+		mtapiRT_QueueInfo_t *,
+		MTAPI_IN mtapi_task_id_t,
+		mtapiRT_ActionInfo_t *,
+		MTAPI_IN void *,
+		MTAPI_IN mtapi_size_t,
+		MTAPI_OUT void *,
+		MTAPI_IN mtapi_size_t,
+		MTAPI_IN mtapi_task_attributes_t *,
+		MTAPI_OUT mtapi_status_t *);
+mtapiRT_JobInfo_t *mtapiRT_getJob
+(
+		MTAPI_IN mtapi_job_id_t, 
+		MTAPI_OUT mtapi_status_t *
+		);
+
+mtapiRT_ActionInfo_t * mtapiRT_getLocalAction(mtapiRT_JobInfo_t *, mtapi_status_t *);
+
+mtapiRT_TaskInfo_t * mtapiRT_waitForLocalTask(mtapiRT_TaskInfo_t *,
+			      MTAPI_IN mtapi_timeout_t,
+			      MTAPI_OUT mtapi_status_t *);
+
+void mtapiRT_waitForRemoteTask(mtapiRT_TaskInfo_t *,
+			      MTAPI_IN mtapi_timeout_t,
+			      MTAPI_OUT mtapi_status_t *);
+
+mtapiRT_TaskInfo_t * mtapiRT_getTask(unsigned, mtapi_status_t *);
+void mtapiRT_deleteTask(mtapiRT_TaskInfo_t *, mtapi_status_t *);
+
+void mtapiRT_switchTask(mtapiRT_TaskInfo_t *);
+
+mtapiRT_QueueInfo_t * mtapiRT_createQueue (
+
+    	MTAPI_IN mtapi_queue_id_t,
+	mtapiRT_JobInfo_t *,
+	mtapiRT_ActionInfo_t *,
+	MTAPI_IN mtapi_queue_attributes_t *,
+	MTAPI_OUT mtapi_status_t *
+		);
+
+void mtapiRT_broadcastActionUpdate(mtapiRT_action_status_t, mtapiRT_MessageType_t, mtapi_status_t*);
+
+void mtapiRT_sendResult(mtapiRT_TaskInfo_t*, unsigned, mtapi_status_t *);
+
+void mtapiRT_initNodeAttribute (
+	MTAPI_OUT mtapi_node_attributes_t * attributes,
+	MTAPI_OUT mtapi_status_t * status
+	);
+
+void mtapiRT_setNodeAttribute (
+	MTAPI_INOUT mtapi_node_attributes_t * attributes,
+	MTAPI_IN mtapi_uint_t attribute_num,
+	MTAPI_IN void * attribute,
+	MTAPI_IN mtapi_size_t attribute_size,
+	MTAPI_OUT mtapi_status_t * status
+	);
+
+void mtapiRT_getNodeAttribute (
+	MTAPI_IN mtapi_node_t node,
+	MTAPI_IN mtapi_uint_t attribute_num,
+	MTAPI_OUT void * attribute,
+	MTAPI_IN mtapi_size_t attribute_size,
+	MTAPI_OUT mtapi_status_t * status
+	);
+
+void mtapiRT_initActionAttribute (
+	MTAPI_OUT mtapi_action_attributes_t * attributes,
+	MTAPI_OUT mtapi_status_t * status
+	);
+
+void mtapiRT_setActionAttribute (
+	MTAPI_INOUT mtapi_action_attributes_t * attributes,
+	MTAPI_IN mtapi_uint_t attribute_num,
+	MTAPI_IN void * attribute,
+	MTAPI_IN mtapi_size_t attribute_size,
+	MTAPI_OUT mtapi_status_t * status
+	);
+
+void mtapiRT_getActionAttribute (
+	MTAPI_IN mtapi_action_attributes_t * attributes,
+	MTAPI_IN mtapi_uint_t attribute_num,
+	MTAPI_OUT void * attribute,
+	MTAPI_IN mtapi_size_t attribute_size,
+	MTAPI_OUT mtapi_status_t * status
+	);
+
+void mtapiRT_initQueueAttribute (
+	MTAPI_OUT mtapi_queue_attributes_t * attributes,
+	MTAPI_OUT mtapi_status_t * status
+	);
+
+void mtapiRT_setQueueAttribute (
+	MTAPI_INOUT mtapi_queue_attributes_t * attributes,
+	MTAPI_IN mtapi_uint_t attribute_num,
+	MTAPI_IN void * attribute,
+	MTAPI_IN mtapi_size_t attribute_size,
+	MTAPI_OUT mtapi_status_t * status
+	);
+
+void mtapiRT_getQueueAttribute (
+	MTAPI_IN mtapi_queue_attributes_t * attributes,
+	MTAPI_IN mtapi_uint_t attribute_num,
+	MTAPI_OUT void * attribute,
+	MTAPI_IN mtapi_size_t attribute_size,
+	MTAPI_OUT mtapi_status_t * status
+	);
+
+void mtapiRT_initTaskAttribute (
+	MTAPI_OUT mtapi_task_attributes_t * attributes,
+	MTAPI_OUT mtapi_status_t * status
+	);
+
+void mtapiRT_setTaskAttribute (
+	MTAPI_INOUT mtapi_task_attributes_t * attributes,
+	MTAPI_IN mtapi_uint_t attribute_num,
+	MTAPI_IN void * attribute,
+	MTAPI_IN mtapi_size_t attribute_size,
+	MTAPI_OUT mtapi_status_t * status
+	);
+
+void mtapiRT_getTaskAttribute (
+	MTAPI_IN mtapi_task_attributes_t * attributes,
+	MTAPI_IN mtapi_uint_t attribute_num,
+	MTAPI_OUT void * attribute,
+	MTAPI_IN mtapi_size_t attribute_size,
+	MTAPI_OUT mtapi_status_t * status
+	);
+
+void mtapiRT_initAffinity (
+	MTAPI_OUT mtapi_affinity_t * mask,
+	MTAPI_IN mtapi_boolean_t affinity,
+	MTAPI_OUT mtapi_status_t * status
+	);
+
+void mtapiRT_setAffinity (
+	MTAPI_INOUT mtapi_affinity_t * mask,
+	MTAPI_IN mtapi_uint_t core_num,
+	MTAPI_IN mtapi_boolean_t affinity,
+	MTAPI_OUT mtapi_status_t * status
+	);
+
+mtapi_boolean_t mtapiRT_getAffinity (
+	MTAPI_IN mtapi_affinity_t * mask,
+	MTAPI_IN mtapi_uint_t core_num,
+	MTAPI_OUT mtapi_status_t * status
+	);
+/************************************************
+  	utility functions
+*************************************************/
+
+unsigned __marshallMessage(mtapiRT_Message_t *, char *);
+
+mtapi_boolean_t __unmarshallMessage(char *, unsigned, mtapiRT_Message_t *);
+
+void __lst_startTask(mtapiRT_Message_t *, mcapi_endpoint_t, mcapi_endpoint_t);
+
+void __lst_waitForTask(mtapiRT_Message_t *, mcapi_endpoint_t, mcapi_endpoint_t);
+
+void __lst_updateAction(mtapiRT_Message_t *, mcapi_endpoint_t, mcapi_endpoint_t);
+
+void __lst_updateAction2(mtapiRT_Message_t *, mcapi_endpoint_t, mcapi_endpoint_t);
+void __lst_updateActionDelete(mtapiRT_Message_t *, mcapi_endpoint_t, mcapi_endpoint_t);
+void __lst_taskCompleted(mtapiRT_Message_t *, mcapi_endpoint_t, mcapi_endpoint_t);
+void __lst_disableAction(mtapiRT_Message_t *, mcapi_endpoint_t, mcapi_endpoint_t);
+void __lst_enableAction(mtapiRT_Message_t *, mcapi_endpoint_t, mcapi_endpoint_t);
+
+
+
+int __getNextPortNum();
+void __freePort(int);
+void *worker_routine(void *);
+void *listener_routine();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

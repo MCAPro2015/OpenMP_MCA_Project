@@ -1,0 +1,129 @@
+ERROR mca_set_debug_level : This library was built without debug support.
+  If you want to enable debugging, re-build with the --enable-debug option.
+Test 1
+initialize node_num=3, status=MCAPI_SUCCESS
+initialize node_num=2, status=MCAPI_SUCCESS
+
+Receiving 0
+Sending: [Sending 0]
+Sending: [Sending 1]
+Sending: [Sending 2]
+Receiving 1
+Sending: [Sending 3]
+Sending: [Sending 4]
+Receiving 2
+Sending: [Sending 5]
+Sending: [Sending 6]
+Sending: [Sending 7]
+Sending: [Sending 8]
+Receiving 3
+Sending: [Sending 9]
+Sending: [Sending 10]
+Receiving 4
+Sending: [Sending 11]
+Sending: [Sending 12]
+Receiving 5
+Sending: [Sending 13]
+Sending: [Sending 14]
+Sending: [Sending 15]
+Receiving 6
+Sending: [Sending 16]
+Sending: [Sending 17]
+Receiving 7
+Sending: [Sending 18]
+Sending: [Sending 19]
+Receiving 8
+Sending: [Sending 20]
+Sending: [Sending 21]
+Sending: [Sending 22]
+Receiving 9
+Sending: [Sending 23]
+Sending: [Sending 24]
+Receiving 10
+Sending: [Sending 25]
+Sending: [Sending 26]
+Receiving 11
+Sending: [Sending 27]
+Sending: [Sending 28]
+Sending: [Sending 29]
+Receiving 12
+Receiving 13
+Receiving 14
+Receiving 15
+Receiving 16
+Receiving 17
+Receiving 18
+Receiving 19
+Receiving 20
+Receiving 21
+Receiving 22
+Receiving 23
+Receiving 24
+Receiving 25
+Receiving 26
+Receiving 27
+Receiving 28
+Receiving 29Test 2
+initialize node_num=2, status=MCAPI_SUCCESS
+initialize node_num=3, status=MCAPI_SUCCESS
+
+Receiving 0
+Receiving 1
+Receiving 2
+Sending: [Sending 0]
+Receiving 3
+Receiving 4
+Sending: [Sending 1]
+Receiving 5
+Receiving 6
+Receiving 7
+Sending: [Sending 2]
+Receiving 8
+Receiving 9
+Sending: [Sending 3]
+Receiving 10
+Sending: [Sending 4]
+Receiving 11
+Receiving 12
+Receiving 13
+Sending: [Sending 5]
+Receiving 14
+Receiving 15
+Sending: [Sending 6]
+Receiving 16
+Receiving 17
+Receiving 18
+Sending: [Sending 7]
+Receiving 19
+Receiving 20
+Sending: [Sending 8]
+Receiving 21
+Receiving 22
+Sending: [Sending 9]
+Receiving 23
+Receiving 24
+Receiving 25
+Sending: [Sending 10]
+Receiving 26
+Sending: [Sending 11]
+Receiving 27
+Receiving 28
+Sending: [Sending 12]
+Receiving 29
+Sending: [Sending 13]
+Sending: [Sending 14]
+Sending: [Sending 15]
+Sending: [Sending 16]
+Sending: [Sending 17]
+Sending: [Sending 18]
+Sending: [Sending 19]
+Sending: [Sending 20]
+Sending: [Sending 21]
+Sending: [Sending 22]
+Sending: [Sending 23]
+Sending: [Sending 24]
+Sending: [Sending 25]
+Sending: [Sending 26]
+Sending: [Sending 27]
+Sending: [Sending 28]
+Sending: [Sending 29]   Test PASSED

@@ -1,0 +1,196 @@
+ERROR mca_set_debug_level : This library was built without debug support.
+  If you want to enable debugging, re-build with the --enable-debug option.
+Sending: 0
+Sending: 1
+Sending: 2
+Sending: 3
+Sending: 4
+Sending: 5
+Sending: 6
+Sending: 7
+Sending: 8
+Sending: 9
+Sending: 10
+Sending: 11
+Sending: 12
+Sending: 13
+Sending: 14
+Sending: 15
+Sending: 16
+Sending: 17
+Sending: 18
+Sending: 19
+Sending: 20
+Sending: 21
+Sending: 22
+Sending: 23
+Sending: 24
+Sending: 25
+Sending: 26
+Sending: 27
+Sending: 28
+Sending: 29
+Sending: 30
+Sending: 31
+Sending: 32
+Sending: 33
+Sending: 34
+Sending: 35
+Sending: 36
+Sending: 37
+Sending: 38
+Sending: 39
+Sending: 40
+Sending: 41
+Sending: 42
+Sending: 43
+Sending: 44
+Sending: 45
+Sending: 46
+Sending: 47
+Sending: 48
+Sending: 49
+Sending: 50
+Sending: 51
+Sending: 52
+Sending: 53
+Sending: 54
+Sending: 55
+Sending: 56
+Sending: 57
+Sending: 58
+Sending: 59
+Sending: 60
+Sending: 61
+Sending: 62
+Sending: 63
+Sending: 64
+Received: 0
+Received: 1
+Received: 2
+Received: 3
+Received: 4
+Received: 5
+Received: 6
+Received: 7
+Received: 8
+Received: 9
+Received: 10
+Received: 11
+Received: 12
+Received: 13
+Received: 14
+Received: 15
+Received: 16
+Received: 17
+Received: 18
+Received: 19
+Received: 20
+Received: 21
+Received: 22
+Received: 23
+Received: 24
+Received: 25
+Received: 26
+Received: 27
+Received: 28
+Received: 29
+Received: 30
+Received: 31
+Received: 32
+Received: 33
+Received: 34
+Received: 35
+Received: 36
+Received: 37
+Received: 38
+Received: 39
+Received: 40
+Received: 41
+Received: 42
+Received: 43
+Received: 44
+Received: 45
+Received: 46
+Received: 47
+Received: 48
+Received: 49
+Received: 50
+Received: 51
+Received: 52
+Received: 53
+Received: 54
+Received: 55
+Received: 56
+Received: 57
+Received: 58
+Received: 59
+Received: 60
+Received: 61
+Received: 62
+Received: 63
+success: sent: [0], recvd: [0]
+success: sent: [1], recvd: [1]
+success: sent: [2], recvd: [2]
+success: sent: [3], recvd: [3]
+success: sent: [4], recvd: [4]
+success: sent: [5], recvd: [5]
+success: sent: [6], recvd: [6]
+success: sent: [7], recvd: [7]
+success: sent: [8], recvd: [8]
+success: sent: [9], recvd: [9]
+success: sent: [10], recvd: [10]
+success: sent: [11], recvd: [11]
+success: sent: [12], recvd: [12]
+success: sent: [13], recvd: [13]
+success: sent: [14], recvd: [14]
+success: sent: [15], recvd: [15]
+success: sent: [16], recvd: [16]
+success: sent: [17], recvd: [17]
+success: sent: [18], recvd: [18]
+success: sent: [19], recvd: [19]
+success: sent: [20], recvd: [20]
+success: sent: [21], recvd: [21]
+success: sent: [22], recvd: [22]
+success: sent: [23], recvd: [23]
+success: sent: [24], recvd: [24]
+success: sent: [25], recvd: [25]
+success: sent: [26], recvd: [26]
+success: sent: [27], recvd: [27]
+success: sent: [28], recvd: [28]
+success: sent: [29], recvd: [29]
+success: sent: [30], recvd: [30]
+success: sent: [31], recvd: [31]
+success: sent: [32], recvd: [32]
+success: sent: [33], recvd: [33]
+success: sent: [34], recvd: [34]
+success: sent: [35], recvd: [35]
+success: sent: [36], recvd: [36]
+success: sent: [37], recvd: [37]
+success: sent: [38], recvd: [38]
+success: sent: [39], recvd: [39]
+success: sent: [40], recvd: [40]
+success: sent: [41], recvd: [41]
+success: sent: [42], recvd: [42]
+success: sent: [43], recvd: [43]
+success: sent: [44], recvd: [44]
+success: sent: [45], recvd: [45]
+success: sent: [46], recvd: [46]
+success: sent: [47], recvd: [47]
+success: sent: [48], recvd: [48]
+success: sent: [49], recvd: [49]
+success: sent: [50], recvd: [50]
+success: sent: [51], recvd: [51]
+success: sent: [52], recvd: [52]
+success: sent: [53], recvd: [53]
+success: sent: [54], recvd: [54]
+success: sent: [55], recvd: [55]
+success: sent: [56], recvd: [56]
+success: sent: [57], recvd: [57]
+success: sent: [58], recvd: [58]
+success: sent: [59], recvd: [59]
+success: sent: [60], recvd: [60]
+success: sent: [61], recvd: [61]
+success: sent: [62], recvd: [62]
+success: sent: [63], recvd: [63]
+   Test PASSED

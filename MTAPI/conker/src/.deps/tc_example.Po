@@ -1,0 +1,1 @@
+tc_example.o: ../../conker/src/tc_example.c

@@ -1,0 +1,275 @@
+ERROR mca_set_debug_level : This library was built without debug support.
+  If you want to enable debugging, re-build with the --enable-debug option.
+Using seed:[1367812040]
+sending and receiving num_msgs=192
+issuing 4 sends...
+issuing 6 sends...
+issuing 8 sends...
+issuing 5 receives...
+issuing 2 receives...
+issuing 4 sends...
+issuing 7 receives...
+issuing 5 sends...
+issuing 9 sends...
+issuing 5 sends...
+issuing 6 sends...
+issuing 1 receives...
+issuing 3 receives...
+issuing 3 sends...
+issuing 4 receives...
+issuing 4 receives...
+issuing 3 receives...
+issuing 6 sends...
+issuing 4 receives...
+issuing 9 receives...
+issuing 10 sends...
+issuing 6 receives...
+issuing 8 receives...
+issuing 10 sends...
+issuing 4 sends...
+issuing 1 receives...
+issuing 7 sends...
+issuing 6 sends...
+issuing 2 receives...
+issuing 9 sends...
+issuing 7 receives...
+issuing 2 receives...
+issuing 3 receives...
+issuing 9 receives...
+issuing 8 receives...
+issuing 2 sends...
+issuing 10 receives...
+issuing 3 receives...
+issuing 6 receives...
+issuing 3 receives...
+issuing 7 sends...
+issuing 9 sends...
+issuing 5 receives...
+issuing 2 receives...
+issuing 3 receives...
+issuing 1 receives...
+issuing 4 receives...
+issuing 8 sends...
+issuing 9 sends...
+issuing 2 receives...
+issuing 4 sends...
+issuing 3 receives...
+issuing 9 receives...
+issuing 9 receives...
+issuing 8 receives...
+issuing 5 sends...
+issuing 5 sends...
+issuing 7 receives...
+issuing 8 receives...
+recv out of entries in the recv queue
+collect_requests collected 21 requests
+issuing 6 sends...
+issuing 8 sends...
+issuing 9 sends...
+issuing 8 sends...
+issuing 7 sends...
+issuing 3 receives...
+issuing 3 sends...
+issuing 1 sends...
+sender done hit NUM_MSGS
+issuing 5 receives...
+issuing 9 receives...
+issuing 9 receives...
+ receiver done hit NUM_MSGS
+ receiver done hit NUM_MSGS
+ receiver done hit NUM_MSGS
+ receiver done hit NUM_MSGS
+collect_requests collected 19 requests
+(0) sent: [Sending: 0], recvd: [Sending: 0]
+(1) sent: [Sending: 1], recvd: [Sending: 1]
+(2) sent: [Sending: 2], recvd: [Sending: 2]
+(3) sent: [Sending: 3], recvd: [Sending: 3]
+(4) sent: [Sending: 4], recvd: [Sending: 4]
+(5) sent: [Sending: 5], recvd: [Sending: 5]
+(6) sent: [Sending: 6], recvd: [Sending: 6]
+(7) sent: [Sending: 7], recvd: [Sending: 7]
+(8) sent: [Sending: 8], recvd: [Sending: 8]
+(9) sent: [Sending: 9], recvd: [Sending: 9]
+(10) sent: [Sending: 10], recvd: [Sending: 10]
+(11) sent: [Sending: 11], recvd: [Sending: 11]
+(12) sent: [Sending: 12], recvd: [Sending: 12]
+(13) sent: [Sending: 13], recvd: [Sending: 13]
+(14) sent: [Sending: 14], recvd: [Sending: 14]
+(15) sent: [Sending: 15], recvd: [Sending: 15]
+(16) sent: [Sending: 16], recvd: [Sending: 16]
+(17) sent: [Sending: 17], recvd: [Sending: 17]
+(18) sent: [Sending: 18], recvd: [Sending: 18]
+(19) sent: [Sending: 19], recvd: [Sending: 19]
+(20) sent: [Sending: 20], recvd: [Sending: 20]
+(21) sent: [Sending: 21], recvd: [Sending: 21]
+(22) sent: [Sending: 22], recvd: [Sending: 22]
+(23) sent: [Sending: 23], recvd: [Sending: 23]
+(24) sent: [Sending: 24], recvd: [Sending: 24]
+(25) sent: [Sending: 25], recvd: [Sending: 25]
+(26) sent: [Sending: 26], recvd: [Sending: 26]
+(27) sent: [Sending: 27], recvd: [Sending: 27]
+(28) sent: [Sending: 28], recvd: [Sending: 28]
+(29) sent: [Sending: 29], recvd: [Sending: 29]
+(30) sent: [Sending: 30], recvd: [Sending: 30]
+(31) sent: [Sending: 31], recvd: [Sending: 31]
+(32) sent: [Sending: 32], recvd: [Sending: 32]
+(33) sent: [Sending: 33], recvd: [Sending: 33]
+(34) sent: [Sending: 34], recvd: [Sending: 34]
+(35) sent: [Sending: 35], recvd: [Sending: 35]
+(36) sent: [Sending: 36], recvd: [Sending: 36]
+(37) sent: [Sending: 37], recvd: [Sending: 37]
+(38) sent: [Sending: 38], recvd: [Sending: 38]
+(39) sent: [Sending: 39], recvd: [Sending: 39]
+(40) sent: [Sending: 40], recvd: [Sending: 40]
+(41) sent: [Sending: 41], recvd: [Sending: 41]
+(42) sent: [Sending: 42], recvd: [Sending: 42]
+(43) sent: [Sending: 43], recvd: [Sending: 43]
+(44) sent: [Sending: 44], recvd: [Sending: 44]
+(45) sent: [Sending: 45], recvd: [Sending: 45]
+(46) sent: [Sending: 46], recvd: [Sending: 46]
+(47) sent: [Sending: 47], recvd: [Sending: 47]
+(48) sent: [Sending: 48], recvd: [Sending: 48]
+(49) sent: [Sending: 49], recvd: [Sending: 49]
+(50) sent: [Sending: 50], recvd: [Sending: 50]
+(51) sent: [Sending: 51], recvd: [Sending: 51]
+(52) sent: [Sending: 52], recvd: [Sending: 52]
+(53) sent: [Sending: 53], recvd: [Sending: 53]
+(54) sent: [Sending: 54], recvd: [Sending: 54]
+(55) sent: [Sending: 55], recvd: [Sending: 55]
+(56) sent: [Sending: 56], recvd: [Sending: 56]
+(57) sent: [Sending: 57], recvd: [Sending: 57]
+(58) sent: [Sending: 58], recvd: [Sending: 58]
+(59) sent: [Sending: 59], recvd: [Sending: 59]
+(60) sent: [Sending: 60], recvd: [Sending: 60]
+(61) sent: [Sending: 61], recvd: [Sending: 61]
+(62) sent: [Sending: 62], recvd: [Sending: 62]
+(63) sent: [Sending: 63], recvd: [Sending: 63]
+(64) sent: [Sending: 64], recvd: [Sending: 64]
+(65) sent: [Sending: 65], recvd: [Sending: 65]
+(66) sent: [Sending: 66], recvd: [Sending: 66]
+(67) sent: [Sending: 67], recvd: [Sending: 67]
+(68) sent: [Sending: 68], recvd: [Sending: 68]
+(69) sent: [Sending: 69], recvd: [Sending: 69]
+(70) sent: [Sending: 70], recvd: [Sending: 70]
+(71) sent: [Sending: 71], recvd: [Sending: 71]
+(72) sent: [Sending: 72], recvd: [Sending: 72]
+(73) sent: [Sending: 73], recvd: [Sending: 73]
+(74) sent: [Sending: 74], recvd: [Sending: 74]
+(75) sent: [Sending: 75], recvd: [Sending: 75]
+(76) sent: [Sending: 76], recvd: [Sending: 76]
+(77) sent: [Sending: 77], recvd: [Sending: 77]
+(78) sent: [Sending: 78], recvd: [Sending: 78]
+(79) sent: [Sending: 79], recvd: [Sending: 79]
+(80) sent: [Sending: 80], recvd: [Sending: 80]
+(81) sent: [Sending: 81], recvd: [Sending: 81]
+(82) sent: [Sending: 82], recvd: [Sending: 82]
+(83) sent: [Sending: 83], recvd: [Sending: 83]
+(84) sent: [Sending: 84], recvd: [Sending: 84]
+(85) sent: [Sending: 85], recvd: [Sending: 85]
+(86) sent: [Sending: 86], recvd: [Sending: 86]
+(87) sent: [Sending: 87], recvd: [Sending: 87]
+(88) sent: [Sending: 88], recvd: [Sending: 88]
+(89) sent: [Sending: 89], recvd: [Sending: 89]
+(90) sent: [Sending: 90], recvd: [Sending: 90]
+(91) sent: [Sending: 91], recvd: [Sending: 91]
+(92) sent: [Sending: 92], recvd: [Sending: 92]
+(93) sent: [Sending: 93], recvd: [Sending: 93]
+(94) sent: [Sending: 94], recvd: [Sending: 94]
+(95) sent: [Sending: 95], recvd: [Sending: 95]
+(96) sent: [Sending: 96], recvd: [Sending: 96]
+(97) sent: [Sending: 97], recvd: [Sending: 97]
+(98) sent: [Sending: 98], recvd: [Sending: 98]
+(99) sent: [Sending: 99], recvd: [Sending: 99]
+(100) sent: [Sending: 100], recvd: [Sending: 100]
+(101) sent: [Sending: 101], recvd: [Sending: 101]
+(102) sent: [Sending: 102], recvd: [Sending: 102]
+(103) sent: [Sending: 103], recvd: [Sending: 103]
+(104) sent: [Sending: 104], recvd: [Sending: 104]
+(105) sent: [Sending: 105], recvd: [Sending: 105]
+(106) sent: [Sending: 106], recvd: [Sending: 106]
+(107) sent: [Sending: 107], recvd: [Sending: 107]
+(108) sent: [Sending: 108], recvd: [Sending: 108]
+(109) sent: [Sending: 109], recvd: [Sending: 109]
+(110) sent: [Sending: 110], recvd: [Sending: 110]
+(111) sent: [Sending: 111], recvd: [Sending: 111]
+(112) sent: [Sending: 112], recvd: [Sending: 112]
+(113) sent: [Sending: 113], recvd: [Sending: 113]
+(114) sent: [Sending: 114], recvd: [Sending: 114]
+(115) sent: [Sending: 115], recvd: [Sending: 115]
+(116) sent: [Sending: 116], recvd: [Sending: 116]
+(117) sent: [Sending: 117], recvd: [Sending: 117]
+(118) sent: [Sending: 118], recvd: [Sending: 118]
+(119) sent: [Sending: 119], recvd: [Sending: 119]
+(120) sent: [Sending: 120], recvd: [Sending: 120]
+(121) sent: [Sending: 121], recvd: [Sending: 121]
+(122) sent: [Sending: 122], recvd: [Sending: 122]
+(123) sent: [Sending: 123], recvd: [Sending: 123]
+(124) sent: [Sending: 124], recvd: [Sending: 124]
+(125) sent: [Sending: 125], recvd: [Sending: 125]
+(126) sent: [Sending: 126], recvd: [Sending: 126]
+(127) sent: [Sending: 127], recvd: [Sending: 127]
+(128) sent: [Sending: 128], recvd: [Sending: 128]
+(129) sent: [Sending: 129], recvd: [Sending: 129]
+(130) sent: [Sending: 130], recvd: [Sending: 130]
+(131) sent: [Sending: 131], recvd: [Sending: 131]
+(132) sent: [Sending: 132], recvd: [Sending: 132]
+(133) sent: [Sending: 133], recvd: [Sending: 133]
+(134) sent: [Sending: 134], recvd: [Sending: 134]
+(135) sent: [Sending: 135], recvd: [Sending: 135]
+(136) sent: [Sending: 136], recvd: [Sending: 136]
+(137) sent: [Sending: 137], recvd: [Sending: 137]
+(138) sent: [Sending: 138], recvd: [Sending: 138]
+(139) sent: [Sending: 139], recvd: [Sending: 139]
+(140) sent: [Sending: 140], recvd: [Sending: 140]
+(141) sent: [Sending: 141], recvd: [Sending: 141]
+(142) sent: [Sending: 142], recvd: [Sending: 142]
+(143) sent: [Sending: 143], recvd: [Sending: 143]
+(144) sent: [Sending: 144], recvd: [Sending: 144]
+(145) sent: [Sending: 145], recvd: [Sending: 145]
+(146) sent: [Sending: 146], recvd: [Sending: 146]
+(147) sent: [Sending: 147], recvd: [Sending: 147]
+(148) sent: [Sending: 148], recvd: [Sending: 148]
+(149) sent: [Sending: 149], recvd: [Sending: 149]
+(150) sent: [Sending: 150], recvd: [Sending: 150]
+(151) sent: [Sending: 151], recvd: [Sending: 151]
+(152) sent: [Sending: 152], recvd: [Sending: 152]
+(153) sent: [Sending: 153], recvd: [Sending: 153]
+(154) sent: [Sending: 154], recvd: [Sending: 154]
+(155) sent: [Sending: 155], recvd: [Sending: 155]
+(156) sent: [Sending: 156], recvd: [Sending: 156]
+(157) sent: [Sending: 157], recvd: [Sending: 157]
+(158) sent: [Sending: 158], recvd: [Sending: 158]
+(159) sent: [Sending: 159], recvd: [Sending: 159]
+(160) sent: [Sending: 160], recvd: [Sending: 160]
+(161) sent: [Sending: 161], recvd: [Sending: 161]
+(162) sent: [Sending: 162], recvd: [Sending: 162]
+(163) sent: [Sending: 163], recvd: [Sending: 163]
+(164) sent: [Sending: 164], recvd: [Sending: 164]
+(165) sent: [Sending: 165], recvd: [Sending: 165]
+(166) sent: [Sending: 166], recvd: [Sending: 166]
+(167) sent: [Sending: 167], recvd: [Sending: 167]
+(168) sent: [Sending: 168], recvd: [Sending: 168]
+(169) sent: [Sending: 169], recvd: [Sending: 169]
+(170) sent: [Sending: 170], recvd: [Sending: 170]
+(171) sent: [Sending: 171], recvd: [Sending: 171]
+(172) sent: [Sending: 172], recvd: [Sending: 172]
+(173) sent: [Sending: 173], recvd: [Sending: 173]
+(174) sent: [Sending: 174], recvd: [Sending: 174]
+(175) sent: [Sending: 175], recvd: [Sending: 175]
+(176) sent: [Sending: 176], recvd: [Sending: 176]
+(177) sent: [Sending: 177], recvd: [Sending: 177]
+(178) sent: [Sending: 178], recvd: [Sending: 178]
+(179) sent: [Sending: 179], recvd: [Sending: 179]
+(180) sent: [Sending: 180], recvd: [Sending: 180]
+(181) sent: [Sending: 181], recvd: [Sending: 181]
+(182) sent: [Sending: 182], recvd: [Sending: 182]
+(183) sent: [Sending: 183], recvd: [Sending: 183]
+(184) sent: [Sending: 184], recvd: [Sending: 184]
+(185) sent: [Sending: 185], recvd: [Sending: 185]
+(186) sent: [Sending: 186], recvd: [Sending: 186]
+(187) sent: [Sending: 187], recvd: [Sending: 187]
+(188) sent: [Sending: 188], recvd: [Sending: 188]
+(189) sent: [Sending: 189], recvd: [Sending: 189]
+(190) sent: [Sending: 190], recvd: [Sending: 190]
+(191) sent: [Sending: 191], recvd: [Sending: 191]
+   Test PASSED

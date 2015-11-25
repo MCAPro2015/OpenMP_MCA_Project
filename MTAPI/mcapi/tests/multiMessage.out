@@ -1,0 +1,9 @@
+Thread=2 done, file=out2.txt written rc=0
+Thread=3 done, file=out3.txt written rc=0
+Thread=1 done, file=out1.txt written rc=0
+checking return codes...
+  Thread[0] returned rc=0
+  Thread[1] returned rc=0
+  Thread[2] returned rc=0
+
+PASSED

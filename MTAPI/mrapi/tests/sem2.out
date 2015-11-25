@@ -1,0 +1,25 @@
+ERROR mca_set_debug_level : This library was built without debug support.
+  If you want to enable debugging, re-build with the --enable-debug option.
+run_thread start tid=0
+run_thread start tid=1
+run_thread done tid=0
+run_thread done tid=1
+mrapi_initialize
+mrapi_initialize
+MRAPI VERSION=FSL 0.9.3.4
+initialize completed!!!!!!!!!!!!!!!!!!!!!!
+MRAPI VERSION=FSL 0.9.3.4
+initialize completed!!!!!!!!!!!!!!!!!!!!!!
+x=1
+x=2
+x=3
+x=4
+x=5
+x=6
+x=7
+x=8
+x=9
+x=10
+x=11
+x=12
+   Test PASSED

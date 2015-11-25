@@ -1,0 +1,9 @@
+run_thread tid=1
+mrapi_initialize
+run_thread tid=0
+mrapi_initialize
+MRAPI VERSION=FSL 0.9.3.4
+MRAPI VERSION=FSL 0.9.3.4
+tid=1 rmem_read read_buf=[Hello World from thread 0]
+tid=0 rmem_read read_buf=[Hello World from thread 1]
+   Test PASSED

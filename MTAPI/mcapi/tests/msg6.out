@@ -1,0 +1,23 @@
+ERROR mca_set_debug_level : This library was built without debug support.
+  If you want to enable debugging, re-build with the --enable-debug option.
+recv: index=10  **recv: index=11  **recv: index=12  **recv: index=13  **recv: index=14  **recv: index=15  **recv: index=16  **recv: index=17  **recv: index=18  **recv: index=19  **sent: index=10 data=Sending: 10 **sent: index=11 data=Sending: 11 **sent: index=12 data=Sending: 12 **sent: index=13 data=Sending: 13 **sent: index=14 data=Sending: 14 **sent: index=15 data=Sending: 15 **sent: index=16 data=Sending: 16 **sent: index=17 data=Sending: 17 **sent: index=18 data=Sending: 18 **sent: index=19 data=Sending: 19 **success: sent: [Sending: 0], recvd: [Sending: 0]
+success: sent: [Sending: 1], recvd: [Sending: 1]
+success: sent: [Sending: 2], recvd: [Sending: 2]
+success: sent: [Sending: 3], recvd: [Sending: 3]
+success: sent: [Sending: 4], recvd: [Sending: 4]
+success: sent: [Sending: 5], recvd: [Sending: 5]
+success: sent: [Sending: 6], recvd: [Sending: 6]
+success: sent: [Sending: 7], recvd: [Sending: 7]
+success: sent: [Sending: 8], recvd: [Sending: 8]
+success: sent: [Sending: 9], recvd: [Sending: 9]
+success: sent: [Sending: 10], recvd: [Sending: 10]
+success: sent: [Sending: 11], recvd: [Sending: 11]
+success: sent: [Sending: 12], recvd: [Sending: 12]
+success: sent: [Sending: 13], recvd: [Sending: 13]
+success: sent: [Sending: 14], recvd: [Sending: 14]
+success: sent: [Sending: 15], recvd: [Sending: 15]
+success: sent: [Sending: 16], recvd: [Sending: 16]
+success: sent: [Sending: 17], recvd: [Sending: 17]
+success: sent: [Sending: 18], recvd: [Sending: 18]
+success: sent: [Sending: 19], recvd: [Sending: 19]
+   Test PASSED

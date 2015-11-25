@@ -1,0 +1,2428 @@
+#ifdef __cplusplus
+  extern "C" {
+#endif
+#include <stdlib.h>
+#include <stdio.h>
+#include <assert.h>
+#include <string.h>
+#include <sched.h>
+#include <unistd.h>
+#include "mtapi.h"
+#include "mtapi_runtime.h"
+#include "mcapi.h"
+#include "pthread.h"
+
+#define TLS __thread
+//#define NUM_WORKER  4 /**< The number of worker threads on the processor. */
+
+//int thread_id[NUM_WORKER];
+int NUM_WORKER;
+int * thread_id;
+
+TLS m_bit = 0x0000; /**< The core affinity bit */
+
+TLS mtapi_node_attributes_t * __mtapi_node_attributes;
+
+TLS mtapiRT_TaskInfo_t * __current_task = MTAPI_NULL;
+TLS mtapi_boolean_t __node_init = MTAPI_FALSE;
+
+mtapi_domain_t __mtapi_domain;
+TLS mtapi_node_t __mtapi_node;
+mtapi_domain_t __mtapi_listener_domain;
+mtapi_node_t __mtapi_listener_node;
+unsigned __mtapi_init_node_id;
+mutex_t __mtapi_task_id_mutex;
+unsigned __mtapi_task_id;
+
+unsigned __mtapi_queue_id;
+mutex_t __mtapi_queue_id_mutex;
+mtapiRT_QueueInfo_t * queueGroup[1]; 
+
+int __listenerActive;
+
+TLS mcapi_endpoint_t __send_endpoint;
+mtapiRT_ActionInfo_t * __mtapi_actions;
+mtapiRT_JobInfo_t * __mtapi_jobs;
+mcapi_port_t __portNum[MCAPI_MAX_ENDPOINTS];
+mutex_t __portMutex;
+queue_t *__task_queue; /**< The local task queue (FIFO) */
+queue_t *__remote_task_queue; 
+queue_t *__completed_task_queue;
+list_t * __mtapi_remote_task_list; /**< The remote task queue (link list) */
+
+
+/* thread id for worker and listener*/
+
+//pthread_t worker_id[NUM_WORKER];
+pthread_t * worker_id;
+pthread_t listener_id;
+
+#define mtapi_assert(x) MTAPI_ASSERT(x, __LINE__);
+/* Test MCAPI and the marshal and unmarshall apis */
+void TestMCAPISender(mtapi_domain_t domain,
+		mtapi_node_t node, 
+		mtapi_domain_t recvDomain,
+		mtapi_node_t recvNode) {
+
+	mcapi_status_t status;
+	mcapi_endpoint_t sendEndpoint;
+	mcapi_endpoint_t remoteEndpoint;
+	mcapi_info_t info;
+	mcapi_uint_t msgSize;
+	mtapiRT_Message_t package;
+	mcapi_port_t port = 0;
+	mcapi_request_t req;
+
+	char buffer[MCAPI_MAX_MSG_SIZE];
+	unsigned sendSize;
+	mtapiRT_Message_t * msg;
+
+	char * update = (char *) malloc(sizeof(char));
+	*update = 'v';
+	printf("reach this stage\n");
+	// initialize and pack message
+	
+	msg = (mtapiRT_Message_t *) malloc (sizeof(mtapiRT_Message_t));
+	msg->sender_domain = domain;
+	msg->sender_node = node;
+	msg->port = port;
+	msg->buffer = (void *) update;
+	msg->buffer_size = sizeof(char);
+	sendSize = __marshallMessage(msg, buffer);
+
+
+	// initialize mcapi 	
+	mcapi_initialize(domain,
+			 node,
+			 MCAPI_NULL,
+			 MCAPI_NULL,
+			 &info,
+			 &status
+			);
+	// create sender endpoint;
+	sendEndpoint = mcapi_endpoint_create (port, status);
+
+	// get endpoint for remote node
+	mcapi_endpoint_get_i (
+			recvDomain,
+			recvNode,
+			1, 
+			&remoteEndpoint,
+			&req,
+			&status
+			);	
+	// send message 
+	mcapi_msg_send_i (
+			sendEndpoint,
+			remoteEndpoint, 
+			&buffer,
+			sendSize,
+			MCAPI_MAX_PRIORITY,
+			&req,
+			&status
+			);
+	
+}
+
+void TestMCAPIReceiver ( mtapi_domain_t domain, 
+		         mtapi_node_t node) {
+	mcapi_status_t status;
+	mcapi_endpoint_t recvEndpoint;
+	mcapi_endpoint_t remoteEndpoint;
+	mcapi_info_t info;
+	mcapi_uint_t nrMessages;
+	mtapiRT_Message_t package;
+	char buffer[MCAPI_MAX_MSG_SIZE];
+	char messageChar;
+	size_t messageSize;
+
+	// initialize MCAPI
+	mcapi_initialize (
+			domain,
+			node,
+			MCAPI_NULL,
+			MCAPI_NULL, 
+			&info, 
+			&status
+			);
+	recvEndpoint = mcapi_endpoint_create (1, &status);
+	while (1) {
+		nrMessages = mcapi_msg_available(recvEndpoint, &status);
+		if (!nrMessages) {
+			sched_yield();
+			continue;
+		}
+		mcapi_msg_recv(recvEndpoint, &buffer, MCAPI_MAX_MSG_SIZE, &messageSize, &status);
+		if (!status != MCAPI_SUCCESS) {
+			printf("ERROR: Test Receive");
+		}
+		__unmarshallMessage(buffer, messageSize, &package);
+
+		// get remote endpoint for acknowledgement.
+		remoteEndpoint = mcapi_endpoint_get (
+					package.sender_domain,
+					package.sender_node,
+					package.port,
+					MCAPI_TIMEOUT_INFINITE,
+					&status
+				);
+		messageChar = *(char *) package.buffer;
+		printf("\nReceive Message %c\n", messageChar);
+	}
+}
+
+/* End test */
+
+///////////////
+
+void MTAPI_ASSERT(mtapi_boolean_t condition, unsigned line)
+{
+	if (!condition) {
+		fprintf(stderr, "INTERNAL ERROR: MTAPI failed assertion(mtapi_runtime.c:%d) shutting down\n", line);
+		exit(1);
+	}
+}
+
+/**
+ * This is the routine for worker threads on the processor. The worker 
+ * thread keeps fetching tasks from the local task queue periodically. Once 
+ * fetching a valid task, the routine will turn to the action function 
+ * associated with the task. If the task is from a remote processor, 
+ * the result will be sent back to the processor which launched the task 
+ * and then deletes the task. Otherwise deletes the tasks directly. 
+ *
+ * Each worker thread is a treated as a MTAPI node with a uniqe domain id
+ * and node id. It has an mcapi_endpoint for communication with other node.
+ * 
+ * The routine will switch a task status to MTAPI_TASK_COMPLETED when it 
+ * returns from the action function of the task.
+ */ 
+
+void *worker_routine(void * arg)
+{
+	int * thread_id;
+	thread_id = (int *) arg;
+	mcapi_status_t mcapi_status;
+	mcapi_info_t mcapi_info;
+	__mtapi_node = *thread_id;
+	mtapi_status_t mtapi_status;
+	mcapi_initialize(
+		__mtapi_domain,
+		*thread_id,
+		MCAPI_NULL,
+		MCAPI_NULL,
+		&mcapi_info,
+		&mcapi_status
+		);
+	__send_endpoint = mcapi_endpoint_create(0, &mcapi_status);
+
+	void * ptr = NULL;
+	mtapiRT_TaskInfo_t *task;
+	void * seq_task;
+	while(1) {
+		queue_lock(__task_queue);
+		ptr = queue_dequeue(__task_queue);
+		queue_unlock(__task_queue);
+		if (ptr == NULL) 
+		{
+			if (queueGroup[0] != MTAPI_NULL) {
+				
+				mutex_lock(&queueGroup[0]->mutex);
+				if (queueGroup[0]->avail == MTAPI_TRUE) 
+				{
+					seq_task = queue_dequeue(queueGroup[0]->seq_task_queue);
+					if (seq_task) {
+						queueGroup[0]->avail = MTAPI_FALSE;
+						queue_lock(__task_queue);
+						queue_enqueue(__task_queue, seq_task);
+						queue_unlock(__task_queue);
+					}
+				}
+				mutex_unlock(&queueGroup[0]->mutex);
+				
+			}
+			continue;
+		}
+		task = (mtapiRT_TaskInfo_t *) ptr;
+
+		if (task->action->status != MTAPIRT_ACTION_CREATED) {
+			task->action->status = MTAPI_TASK_CANCELLED;
+			continue;
+		}
+		/* this is current task for this worker routine */
+		__current_task = task;
+		mutex_lock(&__mtapi_jobs[task->action->jobID].mutex);
+		__mtapi_jobs[task->action->jobID].running++;
+		mutex_unlock(&__mtapi_jobs[task->action->jobID].mutex);
+		mutex_lock(&task->action->mutex);
+		task->action->running++;
+		mutex_unlock(&task->action->mutex);
+
+		mutex_lock(&task->mutex);
+		task->context->instance = __mtapi_jobs[task->action->jobID].running;
+		task->context->status = MTAPI_TASK_RUNNING;
+		task->action->location.fptr (
+				task->arguments,
+				task->argument_size,
+				task->result_buffer,
+				task->result_size,
+				task->action->local_data,
+				task->action->local_data_size,
+				(mtapi_task_context_t * const)task->context
+				);
+		task->context->status = MTAPI_TASK_COMPLETED;
+		if (task->queue != MTAPI_NULL) {
+			mutex_lock(&task->queue->mutex);
+			task->queue->avail = MTAPI_TRUE;
+			mutex_unlock(&task->queue->mutex);
+		}
+		mutex_unlock(&task->mutex);
+//		mutex_lock(&__mtapi_jobs[task->action->jobID].mutex);
+//		__mtapi_jobs[task->action->jobID].running--;
+//		mutex_unlock(&__mtapi_jobs[task->action->jobID].mutex);
+		mutex_lock(&task->action->mutex);
+		task->action->running--;
+		mutex_unlock(&task->action->mutex);
+		__sync_fetch_and_add(&task->action->cnt, -1);
+		
+		
+		if (task->FromRemote == 1) {
+			mtapiRT_sendResult(task, task->init_node, &mtapi_status);
+		} 
+	}	
+}
+/**
+ * This is the routine for listener thread. The listener thread is in 
+ * charge of inter-process communication. The threads(nodes) on a same 
+ * processor forms a domain. 
+ *
+ * listener_routine() performs: 1. updating local action information 
+ * and remote action information. 2. receiving task from other processor
+ * and insert the task into the local task queue. 3. Sending the result back
+ * when a task from remote processor finishes executing. 4. Copying the 
+ * result into local buffer when receiving the result of task which has
+ * been sent to remote processor before. 5. ACK or NACK to a receiving 
+ * message.
+ */
+void * listener_routine()
+{
+	mcapi_status_t mcapi_status;
+	mcapi_endpoint_t recvEndpoint, remoteEndpoint;
+	mcapi_info_t mcapi_info;
+	mcapi_uint_t nrMessages;
+	mtapiRT_Message_t package;
+	char buffer[MCAPI_MAX_MSG_SIZE];
+	size_t msg_size;
+	
+	mcapi_initialize(
+			__mtapi_listener_domain,
+			__mtapi_listener_node,
+			MCAPI_NULL,
+			MCAPI_NULL,
+			&mcapi_info,
+			&mcapi_status
+			);
+	recvEndpoint = mcapi_endpoint_create(NODE_INFOS[__mtapi_init_node_id].lst_recv_port, &mcapi_status);
+
+	__listenerActive = 1;
+
+	while (__listenerActive){
+		nrMessages = mcapi_msg_available(recvEndpoint, &mcapi_status);
+		if (!nrMessages) {
+			sched_yield();
+			continue;
+		}
+		mcapi_msg_recv(recvEndpoint, &buffer, MCAPI_MAX_MSG_SIZE, &msg_size, &mcapi_status);
+		if (mcapi_status != MCAPI_SUCCESS) {
+			printf("listener receiving error\n");
+		}
+		__unmarshallMessage(buffer, msg_size, &package);
+		/* get the endpoint which sends this message */
+
+		remoteEndpoint = mcapi_endpoint_get(
+				package.sender_domain,
+				package.sender_node,
+				package.port,
+				MCAPI_TIMEOUT_INFINITE,
+				&mcapi_status);
+		if (mcapi_status != MCAPI_SUCCESS) {
+			printf("getting remote endpoint failure\n");
+		}
+		switch (package.type) {
+			case MTAPIRT_MSG_START_TASK :
+				__lst_startTask(&package, recvEndpoint, remoteEndpoint);
+				break;
+			case MTAPIRT_MSG_WAIT_TASK:
+				__lst_waitForTask(&package, recvEndpoint, remoteEndpoint);
+				break;
+			case MTAPIRT_MSG_UPDATE_ACTION:
+				__lst_updateAction(&package, recvEndpoint, remoteEndpoint);
+				break;
+			case MTAPIRT_MSG_UPDATE_ACTION_2:
+				__lst_updateAction2(&package, recvEndpoint, remoteEndpoint);
+				break;
+			case MTAPIRT_MSG_DELETE_ACTION:
+				__lst_updateActionDelete(&package, recvEndpoint, remoteEndpoint);
+				break;
+			case MTAPIRT_MSG_COMPLETE_TASK:
+				__lst_taskCompleted(&package, recvEndpoint, remoteEndpoint);
+				break;
+			case MTAPIRT_MSG_SYNC:
+			case MTAPIRT_MSG_ACK:
+			case MTAPIRT_MSG_NACK:
+			case MTAPIRT_MSG_GET_ACTION:
+			case MTAPIRT_MSG_CANCEL_TASK:
+			case MTAPIRT_MSG_CREATE_ACTION:
+			case MTAPIRT_MSG_DISABLE_ACTION:
+			case MTAPIRT_MSG_ENABLE_ACTION:
+				break;
+		}
+	}
+	return MTAPI_NULL;
+	
+
+	
+}
+
+mtapi_boolean_t mtapiRT_nodeInitialized (mtapi_status_t * status)
+{
+	*status = MTAPI_SUCCESS;
+	if (__node_init) {
+		return MTAPI_TRUE;
+	}
+	return MTAPI_FALSE;
+}
+
+mtapi_domain_t mtapiRT_getDomainId(mtapi_status_t * status) 
+{
+	if (!mtapiRT_nodeInitialized(status)) {
+		* status = MTAPI_ERR_NODE_NOTINIT;
+		return -1;
+	} else {
+		return __mtapi_domain;
+	}
+}
+
+mtapi_node_t mtapiRT_getNodeId(mtapi_status_t * status) 
+{
+	if (!mtapiRT_nodeInitialized(status)) {
+		* status = MTAPI_ERR_NODE_NOTINIT;
+		return -1;
+	} else {
+		return __mtapi_node;
+	}
+}
+
+/**
+ * This function initializes the MTAPI runtime system. The function 
+ * initializes the local task queue, remote task queue, a list of action
+ * objects, a list of job objects and a list of queue objects. This 
+ * function initializes based on node information in header file of the 
+ * application.
+ *
+ * The list of job obj keeps track of all the actions associated with each
+ * job, local and remote. The job list updates immediately when an action 
+ * is created or deleted on both local processor or remote processor.
+ *
+ * The local task queue stores the tasks which are associated with a local
+ * action. The remote task queue stores the tasks which are associated 
+ * with a remote action.
+ *
+ * mtapiRT_initialize() fork the listener thread as well as the group of 
+ * worker threads.
+ */ 
+
+void mtapiRT_initialize(MTAPI_IN mtapi_domain_t domain_id, 
+		        MTAPI_IN mtapi_node_t node_id,
+			mtapi_node_attributes_t * node_attributes,
+			MTAPI_OUT mtapi_info_t *mtapi_info,
+			mtapi_status_t * status)
+{
+	int i, j, k;
+	int rc;
+//	int NUM_WORKER;
+	rc = MCAPI_MAX_ENDPOINTS;
+	mtapiRT_ActionInfo_t * remoteActionInfo;
+	mtapiRT_ActionInfo_t * tmpActionInfo;
+	/*
+	 * initialize __portNum
+	 */
+
+	__mtapi_domain = domain_id;
+	__mtapi_node = node_id;
+	__mtapi_node_attributes = node_attributes;
+	__mtapi_listener_domain = __mtapi_domain;
+	__mtapi_listener_node = __mtapi_node + 1;
+	__mtapi_task_id = 0;
+
+	NUM_WORKER = sysconf(_SC_NPROCESSORS_CONF);
+// 	NUM_WORKER = 4;
+
+	thread_id = (int *) malloc (sizeof(int) * NUM_WORKER);
+	mutex_init(&__mtapi_task_id_mutex);
+	for (i = 0; i < MCAPI_MAX_ENDPOINTS; i++) {
+		__portNum[i] = 0;
+	}
+	mutex_init(&__portMutex);
+	/*
+	 *  get the node id
+	 */
+	for (i = 0; i < NUM_NODES; i++) {
+		if (NODE_INFOS[i].domain == domain_id && NODE_INFOS[i].node == node_id) {
+			__mtapi_init_node_id = i;
+		}
+	}
+	__send_endpoint = mcapi_endpoint_create(NODE_INFOS[__mtapi_init_node_id].req_send_port, status);
+        /*
+	 *  initialize __mtapi_actions for each node
+	 */
+	__mtapi_actions = (mtapiRT_ActionInfo_t *) malloc (NODE_INFOS[__mtapi_init_node_id].num_actions * sizeof(mtapiRT_ActionInfo_t));
+	for (i = 0; i < NODE_INFOS[__mtapi_init_node_id].num_actions; i++) {
+		mutex_init(&__mtapi_actions[i].mutex);
+		__mtapi_actions[i].jobID = NODE_INFOS[__mtapi_init_node_id].actions[i];
+		__mtapi_actions[i].status = MTAPIRT_ACTION_NULL;
+		__mtapi_actions[i].type = MTAPIRT_ACTION_LOCAL;
+		__mtapi_actions[i].cnt = 0;
+		__mtapi_actions[i].running = 0;
+		__mtapi_actions[i].next = MTAPI_NULL;
+		__mtapi_actions[i].attributes = MTAPI_NULL;
+	}
+
+	/*
+	 *  initialize __mtapi_jobs for each node. each job will associate 
+	 *  with a pointer to the action. If the mtapiRT_ActionInfo is on
+	 *  this node. It will attached to its address. Otherwise will 
+	 *  create one marked with MTAPIRT_ACTION_REMOTE and attach to 
+	 *  this job.
+	 *
+	 */
+	__mtapi_jobs = (mtapiRT_JobInfo_t *) malloc (sizeof(mtapiRT_JobInfo_t) * NUM_JOBS);
+	for (i = 0; i < NUM_JOBS; i++) {
+		__mtapi_jobs[i].running = 0;
+		__mtapi_jobs[i].job_id = i;
+		__mtapi_jobs[i].actions = NULL;
+		mutex_init(&__mtapi_jobs[i].mutex);
+	}
+	/*  first attach local action */
+	for (i = 0; i < NUM_JOBS; i++) {
+		for (j = 0; j < NODE_INFOS[__mtapi_init_node_id].num_actions; j ++) {
+			if (__mtapi_actions[j].jobID == i) {
+				__mtapi_jobs[i].actions = &__mtapi_actions[j];
+			}
+		}
+	}
+
+	/*  attach remote action */
+	for (i = 0; i < NUM_JOBS; i++) {
+		for (j = 0; j < NUM_NODES; j++) {
+			if (j == __mtapi_init_node_id) {
+				continue;
+			}
+			for (k = 0; k < NODE_INFOS[j].num_actions; k++) {
+				if (NODE_INFOS[j].actions[k] != i) {
+					continue;
+				}
+				remoteActionInfo = (mtapiRT_ActionInfo_t *) malloc (sizeof(mtapiRT_ActionInfo_t));
+				mutex_init(&remoteActionInfo->mutex);
+				remoteActionInfo->jobID = i;
+
+				remoteActionInfo->status = MTAPIRT_ACTION_NULL;
+				remoteActionInfo->type = MTAPIRT_ACTION_REMOTE;
+				remoteActionInfo->location.init_node = j;
+				remoteActionInfo->cnt = 0;
+				remoteActionInfo->running = 0;
+				remoteActionInfo->next = MTAPI_NULL;
+				remoteActionInfo->attributes = MTAPI_NULL;
+				/*  attach remote action to tail of __mtapi_jobs */
+				if (__mtapi_jobs[i].actions == MTAPI_NULL) {
+					__mtapi_jobs[i].actions = remoteActionInfo;
+				} else {
+					tmpActionInfo = __mtapi_jobs[i].actions;
+					while (tmpActionInfo->next != MTAPI_NULL) {
+						tmpActionInfo = tmpActionInfo->next;
+					}
+					tmpActionInfo->next = remoteActionInfo;
+				}
+			}
+
+		
+		}
+	}
+
+	/* initialize task queue */
+
+	__task_queue = (queue_t *) malloc (sizeof (queue_t));
+	queue_init(__task_queue);
+	__completed_task_queue = (queue_t *) malloc (sizeof(queue_t));
+	queue_init(__completed_task_queue);
+	__remote_task_queue = (queue_t *) malloc (sizeof(queue_t));
+	queue_init(__remote_task_queue);
+
+	/* initialize queuegroup */
+	__mtapi_queue_id = 0;
+	mutex_init(&__mtapi_queue_id_mutex);
+
+	queueGroup[0] = MTAPI_NULL;
+
+	/* initialize list for remote task */
+	__mtapi_remote_task_list = (list_t *) malloc (sizeof(list_t));
+	list_init(__mtapi_remote_task_list);
+	
+
+	/* launch listener routine */
+	rc = pthread_create(&listener_id, NULL, listener_routine, NULL);
+	if (rc) {
+		fprintf(stderr, "Fail to create listener thread\n");
+	}
+	/* launch the worker routine */
+	for (i = 0; i < NUM_WORKER; i++) {
+		thread_id[i] = __mtapi_node + i + 10;
+	}
+	worker_id = (pthread_t *) malloc (sizeof(pthread_t) * NUM_WORKER);
+	for (i = 0; i < NUM_WORKER; i ++) {
+		
+		rc = pthread_create(&worker_id[i], NULL, worker_routine, (void *) &thread_id[i]);
+		if (rc) {
+			fprintf(stderr, "Fail to create worker thread\n");
+		}
+	}
+	__current_task = MTAPI_NULL;
+	__node_init = MTAPI_TRUE;
+}
+
+/**
+ *  This function creates the software action associated with the job. A
+ *  software action basically consists of a job id, an entrance to action
+ *  routine, running counter, mutex, node local data and pointer to the
+ *  next action which implementes the same job. A local action has an 
+ *  action function implemented on the local processor while a remote one
+ *  has an action function implemented on a remote processor.
+ */
+
+mtapiRT_ActionInfo_t * mtapiRT_createAction (
+		MTAPI_IN mtapi_job_id_t job,
+		MTAPI_IN mtapi_action_function_t function,
+		MTAPI_IN void * node_local_data,
+		MTAPI_IN mtapi_size_t node_local_data_size,
+		MTAPI_IN mtapi_action_attributes_t * attributes,
+		MTAPI_OUT mtapi_status_t * status
+		)
+{
+	/*  the first action in __mtapi_jobs[job].actions is local action*/
+	mtapiRT_ActionInfo_t * action = __mtapi_jobs[job].actions;
+	if (action == MTAPI_NULL) {
+		fprintf(stderr, "mtapiRT_createAction Error: action does not exist\n");
+		return MTAPI_NULL;
+	}
+
+	if (action->type != MTAPIRT_ACTION_LOCAL) {
+		fprintf(stderr, "mtapiRT_createAction Error: create a non-local action\n ");
+		return MTAPI_NULL;
+	}
+
+	/*  create local action  */
+        mutex_lock(&action->mutex);
+	action->status = MTAPIRT_ACTION_CREATED;
+	action->location.fptr = function;
+	action->local_data = node_local_data;
+	action->local_data_size = node_local_data_size;
+	action->attributes = attributes;
+	mutex_unlock(&action->mutex);
+	mtapiRT_action_status_t actionStatus = MTAPIRT_ACTION_CREATED;
+	mtapiRT_MessageType_t messageType = MTAPIRT_MSG_UPDATE_ACTION;
+	mtapiRT_broadcastActionUpdate(actionStatus, messageType , status);
+	return action;
+}
+
+/**
+ * This function deletes the software action and broadcasts to all the processors that this action has been deleted. This 
+ * function applies only to local action on this processor.
+ */
+void mtapiRT_deleteAction(
+		mtapiRT_ActionInfo_t *action,
+		mtapi_timeout_t timeout,
+		mtapi_status_t * status
+		)
+{
+	mtapiRT_action_status_t actionStatus = MTAPIRT_ACTION_DELETED;
+	mtapiRT_MessageType_t messageType = MTAPIRT_MSG_DELETE_ACTION;
+	mutex_lock(&action->mutex);
+	action->status = MTAPIRT_ACTION_DELETED;
+	mtapiRT_broadcastActionUpdate(actionStatus, messageType, status);
+	mutex_unlock(&action->mutex);
+
+}
+
+void mtapiRT_disableAction (
+	mtapiRT_ActionInfo_t * action,
+	mtapi_timeout_t timeout,
+	mtapi_status_t * status
+	)
+{
+	mtapiRT_action_status_t actionStatus = MTAPIRT_ACTION_DISABLED;
+	mtapiRT_MessageType_t messageType = MTAPIRT_MSG_DISABLE_ACTION;
+	mutex_lock(&action->mutex);
+	action->status = MTAPIRT_ACTION_DISABLED;
+	mtapiRT_broadcastActionUpdate(actionStatus, messageType, status);
+	mutex_unlock(&action->mutex);
+}
+
+void mtapiRT_enableAction (
+	mtapiRT_ActionInfo_t * action,
+	mtapi_timeout_t timeout,
+	mtapi_status_t * status
+	)
+{ 
+	mtapiRT_action_status_t actionStatus = MTAPIRT_ACTION_CREATED;
+	mtapiRT_MessageType_t messageType = MTAPIRT_MSG_UPDATE_ACTION_2;
+	mutex_lock(&action->mutex);
+	action->status = MTAPIRT_ACTION_CREATED;
+	mtapiRT_broadcastActionUpdate(actionStatus, messageType, status);
+	mutex_unlock(&action->mutex);
+}
+
+
+/**
+ * This function broadcast to all the other processors when the local 
+ * action status is changed to keep the action information consistency 
+ * across domains.
+ */
+
+void mtapiRT_broadcastActionUpdate(mtapiRT_action_status_t actionStatus, mtapiRT_MessageType_t messageType, mtapi_status_t * status)
+{
+
+	mcapi_endpoint_t remoteEndpt[NUM_NODES];
+	mcapi_status_t mcapi_status;
+	mcapi_request_t req[NUM_NODES];
+	int i;
+	int cnt = 0;
+	int j = 0;
+	char buffer[MCAPI_MAX_MSG_SIZE];
+	unsigned send_size;
+//	unsigned recv_size;
+
+	mtapiRT_ActionUpdate_t * update;
+	update = (mtapiRT_ActionUpdate_t *) malloc (sizeof(mtapiRT_ActionUpdate_t));
+
+	for (i = 0; i < NODE_INFOS[__mtapi_init_node_id].num_actions; i++) {
+		if (__mtapi_actions[i].status == actionStatus) {
+			update->job[j] = __mtapi_actions[i].jobID;
+			cnt++;
+		}
+	}
+	update->num_created_action = cnt;
+	update->init_node = __mtapi_init_node_id;
+
+
+	mtapiRT_Message_t * msg;
+        msg = (mtapiRT_Message_t *) malloc (sizeof(mtapiRT_Message_t));	
+	msg->type = messageType;
+	msg->sender_domain = __mtapi_domain;
+	msg->sender_node = __mtapi_node;
+	msg->port = 0;
+	msg->buffer = (void *) update;
+	msg->buffer_size = sizeof(mtapiRT_ActionUpdate_t);
+	send_size = __marshallMessage(msg, buffer);
+	for (i = 0; i < NUM_NODES; i++) {
+		if (i != __mtapi_init_node_id) {
+			mcapi_endpoint_get_i(
+					NODE_INFOS[i].domain,
+					NODE_INFOS[i].node + 1,
+					NODE_INFOS[i].lst_recv_port,
+					&remoteEndpt[i],
+					&req[i],
+					&mcapi_status
+					);
+			mcapi_msg_send_i (
+					__send_endpoint,
+					remoteEndpt[i],
+					&buffer,
+					send_size,
+					MCAPI_MAX_PRIORITY,
+					&req[i],
+					&mcapi_status
+					);
+		}
+	}
+	*status = MTAPI_SUCCESS;
+}
+
+/**
+ *  Get the best action (at this stage we only pick the action
+ *  which has the least running counter) at this moment to be the best 
+ *  action for current task. 
+ */
+mtapiRT_ActionInfo_t * mtapiRT_getBestAction(mtapiRT_JobInfo_t * job, mtapi_status_t * status)
+{
+	int min;
+	mtapiRT_ActionInfo_t * tmpAction;
+	mtapiRT_ActionInfo_t * currentAction;
+	currentAction = job->actions;
+	/*  prefer local action  */
+	if (currentAction->cnt == 0 && currentAction->status == MTAPIRT_ACTION_CREATED) {
+		__sync_fetch_and_add(&currentAction->cnt, 1);
+		*status = MTAPI_SUCCESS;
+		return currentAction;
+	}
+	/* return action with min running counter */
+	tmpAction = currentAction;
+	while (tmpAction->next != MTAPI_NULL) {
+		
+		min = currentAction->cnt;
+		tmpAction = tmpAction->next;
+		if (currentAction->status != MTAPIRT_ACTION_CREATED) {
+			currentAction = tmpAction;
+			continue;
+		}
+			
+		if (tmpAction->cnt < min && tmpAction->status == MTAPIRT_ACTION_CREATED) {
+			currentAction = tmpAction;
+		}
+	}
+	/* not sure if it is necessary cause the next steps will keep checking this */
+	if (currentAction->status == MTAPIRT_ACTION_CREATED) {
+		__sync_fetch_and_add(&currentAction->cnt, 1);
+		*status = MTAPI_SUCCESS;
+		return currentAction;
+	} else {
+		*status = MTAPI_ERR_ACTION_INVALID;
+		return MTAPI_NULL;
+	}
+}
+
+/**
+ * Get the best action at this time for an action which is inserted into
+ * a queue object.
+ */
+
+mtapiRT_ActionInfo_t * mtapiRT_getBestActionQueue(mtapiRT_QueueInfo_t * queue, mtapi_status_t * status)
+{
+	mtapiRT_ActionInfo_t * action;
+	action = mtapiRT_getBestAction (queue->job, status);
+	*status = MTAPI_SUCCESS;
+	return action;
+}
+
+/**
+ * Create a task and insert this task into the local task queue when the 
+ * best action associated with this task is a local action at this moment.
+ *
+ * If this function is called inside a task function, the created task
+ * will be the child task of the task which creates it.
+ */
+
+mtapiRT_TaskInfo_t * mtapiRT_startLocalTask(
+		int IsFromRemote,
+		unsigned node,
+		MTAPI_IN mtapi_task_id_t task_id,
+		mtapiRT_ActionInfo_t * action,
+		MTAPI_IN void * arguments,
+		MTAPI_IN mtapi_size_t arguments_size,
+		MTAPI_OUT void * result_buffer,
+		MTAPI_IN mtapi_size_t result_size,
+		MTAPI_IN mtapi_task_attributes_t * attributes,
+		MTAPI_OUT mtapi_status_t *status
+		)
+{
+	/* initialize a task node */
+	mtapiRT_TaskInfo_t * taskInfo;
+	if (action->status != MTAPIRT_ACTION_CREATED) {
+		*status = MTAPI_ERR_ACTION_INVALID;
+		return MTAPI_NULL;
+	}
+	taskInfo = (mtapiRT_TaskInfo_t *) malloc (sizeof (mtapiRT_TaskInfo_t));
+	taskInfo->task_id = task_id;
+	if (IsFromRemote) {
+		taskInfo->init_node = node;
+	} else {
+		taskInfo->init_node = __mtapi_init_node_id;
+	}
+	taskInfo->queueID = -1;
+	taskInfo->queue = MTAPI_NULL;
+	mutex_lock(&__mtapi_task_id_mutex);
+	taskInfo->internal_task_id = __mtapi_task_id++;
+	/* for task in local task queue, the external_task_id 	*
+	 * is set to -1						*/
+	taskInfo->external_task_id = -1;
+	mutex_unlock(&__mtapi_task_id_mutex);
+	taskInfo->action = action;
+	taskInfo->arguments = arguments;
+	taskInfo->argument_size = arguments_size;
+	taskInfo->result_buffer = result_buffer;
+	taskInfo->result_size = result_size;
+	taskInfo->attributes = attributes;
+	taskInfo->context = (mtapi_task_context_t *) malloc (sizeof(mtapi_task_context_t));
+	taskInfo->FromRemote = IsFromRemote;
+	taskInfo->context->status = MTAPI_TASK_SCHEDULED;
+	taskInfo->context->num_core = NUM_WORKER;
+	mutex_init(&taskInfo->mutex);
+
+	if (__current_task == NULL) {
+		/* this is the first task for program */
+		taskInfo->num_children = 0;
+		__current_task = taskInfo;
+		__current_task->parent = MTAPI_NULL;
+		__current_task->child = MTAPI_NULL;
+	} else {
+		/* this is not the first task for program */
+		__current_task->child = taskInfo;
+		taskInfo->parent = __current_task;
+		taskInfo->child = MTAPI_NULL;
+		taskInfo->num_children = 0;
+		__current_task->num_children++;
+	}
+
+	/* insert a task node into the queue */
+	/* task cut off when task queue is full */
+	if (queue_is_full(__task_queue) == 1) {
+		printf("task task cut-off\n");
+		__current_task = taskInfo;
+		mutex_lock(&__mtapi_jobs[taskInfo->action->jobID].mutex);
+		__mtapi_jobs[taskInfo->action->jobID].running++;
+		mutex_unlock(&__mtapi_jobs[taskInfo->action->jobID].mutex);
+		mutex_lock(&taskInfo->action->mutex);
+		taskInfo->action->running++;
+		mutex_unlock(&taskInfo->action->mutex);
+
+		mutex_lock(&taskInfo->mutex);
+		taskInfo->context->status = MTAPI_TASK_RUNNING;
+		taskInfo->context->instance = __mtapi_jobs[taskInfo->action->jobID].running;
+		taskInfo->action->location.fptr (
+				taskInfo->arguments,
+				taskInfo->argument_size,
+				taskInfo->result_buffer,
+				taskInfo->result_size,
+				taskInfo->action->local_data,
+				taskInfo->action->local_data_size,
+				(mtapi_task_context_t * const)taskInfo->context
+				);
+		taskInfo->context->status = MTAPI_TASK_COMPLETED;
+		if (taskInfo->queue != MTAPI_NULL) {
+			mutex_lock (&taskInfo->queue->mutex);
+			taskInfo->queue->avail = MTAPI_TRUE;
+			mutex_unlock(&taskInfo->queue->mutex);
+		}
+		mutex_unlock(&taskInfo->mutex);
+		mutex_lock(&__mtapi_jobs[taskInfo->action->jobID].mutex);
+		__mtapi_jobs[taskInfo->action->jobID].running--;
+		mutex_unlock(&__mtapi_jobs[taskInfo->action->jobID].mutex);
+		mutex_lock(&taskInfo->action->mutex);
+		taskInfo->action->running--;
+		mutex_unlock(&taskInfo->action->mutex);
+		__sync_fetch_and_add(&taskInfo->action->cnt, -1);
+		if (taskInfo->FromRemote == 1) {
+			mtapiRT_sendResult(taskInfo, taskInfo->init_node, status);
+		} 
+
+	} else {
+		queue_lock(__task_queue);
+		queue_enqueue(__task_queue, (void *) taskInfo);
+		queue_unlock(__task_queue);
+	}
+
+	return taskInfo;
+}
+
+/**
+ * Create a task and insert the task into a queue object when the best 
+ * action associated with this queue object is a local action at this 
+ * moment. The tasks associated with the queue object must be executed
+ * sequentially.
+ *
+ * If this function is called inside a task function, the created task
+ * will be the child task of the task which creates it.
+ */
+
+mtapiRT_TaskInfo_t * mtapiRT_startLocalTaskQueue(
+		int IsFromRemote,
+		mtapiRT_QueueInfo_t * queue,
+		MTAPI_IN mtapi_task_id_t task_id,
+		mtapiRT_ActionInfo_t * action,
+		MTAPI_IN void * arguments,
+		MTAPI_IN mtapi_size_t arguments_size,
+		MTAPI_OUT void * result_buffer,
+		MTAPI_IN mtapi_size_t result_size,
+		MTAPI_IN mtapi_task_attributes_t * attributes,
+		MTAPI_OUT mtapi_status_t *status
+		)
+{
+	/* initialize a task node */
+	mtapiRT_TaskInfo_t * taskInfo;
+	if (action->status != MTAPIRT_ACTION_CREATED) {
+		*status = MTAPI_ERR_ACTION_INVALID;
+		return MTAPI_NULL;
+	}
+	taskInfo = (mtapiRT_TaskInfo_t *) malloc (sizeof (mtapiRT_TaskInfo_t));
+	taskInfo->task_id = task_id;
+	taskInfo->queue = queue;
+	taskInfo->queueID = queue->internal_queue_id;
+	mutex_lock(&__mtapi_task_id_mutex);
+	taskInfo->internal_task_id = __mtapi_task_id++;
+	/* for task in local task queue, the external_task_id 	*
+	 * is set to -1						*/
+	taskInfo->external_task_id = -1;
+	mutex_unlock(&__mtapi_task_id_mutex);
+	taskInfo->action = action;
+	taskInfo->arguments = arguments;
+	taskInfo->argument_size = arguments_size;
+	taskInfo->result_buffer = result_buffer;
+	taskInfo->result_size = result_size;
+	taskInfo->attributes = attributes;
+	taskInfo->context = (mtapi_task_context_t *) malloc (sizeof(mtapi_task_context_t));
+	taskInfo->FromRemote = IsFromRemote;
+	taskInfo->context->status = MTAPI_TASK_SCHEDULED;
+	taskInfo->context->num_core = NUM_WORKER;
+	mutex_init(&taskInfo->mutex);
+
+	if (__current_task == NULL) {
+		/* this is the first task for program */
+		taskInfo->num_children = 0;
+		__current_task = taskInfo;
+		__current_task->parent = MTAPI_NULL;
+		__current_task->child = MTAPI_NULL;
+	} else {
+		/* this is not the first task for program */
+		__current_task->child = taskInfo;
+		taskInfo->parent = __current_task;
+		taskInfo->child = MTAPI_NULL;
+		taskInfo->num_children = 0;
+		__current_task->num_children++;
+	}
+	mutex_lock(&queue->mutex);
+	queue_enqueue(queue->seq_task_queue, (void *) taskInfo);
+	if (queue->avail == MTAPI_TRUE) {
+		void * tmpPtr = queue_dequeue(queue->seq_task_queue);
+		if (tmpPtr) {
+			queue_enqueue(__task_queue, tmpPtr);
+			queue->avail = MTAPI_FALSE;
+		}
+	}
+	mutex_unlock(&queue->mutex);
+
+
+	return taskInfo;
+}
+
+/**
+ * Create a task and send the task to the remote processor when the best
+ * action associated with this task is on the remote processor at this 
+ * moment. The task is then inserted into the remote task queue.
+ *
+ * If this function is called inside a task function, the created task
+ * will be the child task of the task which creates it.
+ */
+
+mtapiRT_TaskInfo_t * mtapiRT_startRemoteTask(
+		MTAPI_IN mtapi_task_id_t task_id,
+		mtapiRT_ActionInfo_t * action,
+		MTAPI_IN void * arguments,
+		MTAPI_IN mtapi_size_t arguments_size,
+		MTAPI_OUT void * result_buffer,
+		MTAPI_IN mtapi_size_t result_size,
+		MTAPI_IN mtapi_task_attributes_t * attributes,
+		MTAPI_OUT mtapi_status_t *status
+		)
+{
+	mcapi_endpoint_t remoteEndpt;
+	mcapi_status_t mcapi_status;
+	mtapiRT_TaskInfo_t *taskInfo;
+	char buffer[MCAPI_MAX_MSG_SIZE];
+	unsigned bufferSize;
+	unsigned send_size;
+	size_t size;
+
+	if (action->status != MTAPIRT_ACTION_CREATED) {
+		*status = MTAPI_ERR_ACTION_INVALID;
+		return MTAPI_NULL;
+	}
+	taskInfo = (mtapiRT_TaskInfo_t *) malloc (sizeof(mtapiRT_TaskInfo_t));
+	taskInfo->init_node = __mtapi_init_node_id;
+	taskInfo->queueID = -1;
+	taskInfo->queue = MTAPI_NULL;
+	taskInfo->task_id = task_id;
+	taskInfo->internal_task_id = __mtapi_task_id++;
+	taskInfo->action = action;
+	taskInfo->arguments = arguments;
+	taskInfo->argument_size = arguments_size;
+	taskInfo->result_buffer = result_buffer;
+	taskInfo->result_size = result_size;
+	taskInfo->attributes = attributes;
+	taskInfo->context = (mtapi_task_context_t *) malloc (sizeof(mtapi_task_context_t));
+	taskInfo->context->status = MTAPI_TASK_SCHEDULED;
+	taskInfo->context->num_core = NUM_WORKER;
+	mutex_init(&taskInfo->mutex);
+	/* get remote endpoint */
+	remoteEndpt = mcapi_endpoint_get(
+		NODE_INFOS[action->location.init_node].domain,
+		NODE_INFOS[action->location.init_node].node + 1,
+		NODE_INFOS[action->location.init_node].lst_recv_port,
+		MCAPI_TIMEOUT_INFINITE,
+		&mcapi_status
+			);
+	/* initialize Remote Task Info */
+	mtapiRT_RemoteTaskInfo_t * remoteTaskInfo;
+	remoteTaskInfo = (mtapiRT_RemoteTaskInfo_t *) malloc (sizeof(mtapiRT_RemoteTaskInfo_t));
+	remoteTaskInfo->task_id = task_id;
+	remoteTaskInfo->node_id = taskInfo->init_node;
+	remoteTaskInfo->job_id = action->jobID;
+	remoteTaskInfo->arguments_size = arguments_size;
+	remoteTaskInfo->result_buffer = MTAPI_NULL;
+	remoteTaskInfo->result_size = result_size;
+
+	/* pack remoteTaskInfo into a message */
+	mtapiRT_Message_t * msg;
+	msg = (mtapiRT_Message_t *) malloc (sizeof(mtapiRT_Message_t));
+	msg->type = MTAPIRT_MSG_START_TASK;
+	msg->sender_domain = __mtapi_domain;
+	msg->sender_node = __mtapi_node;
+	msg->port = 0;
+	msg->buffer = (void *) remoteTaskInfo;
+	msg->buffer_size = sizeof(mtapiRT_RemoteTaskInfo_t);
+	/* pack msg and argmuments into a buffer to send */
+	bufferSize = __marshallMessage(msg, buffer);
+	memcpy(&buffer[bufferSize], arguments, arguments_size);
+	send_size = bufferSize + arguments_size;
+
+	/* send buffer to remote node */
+        list_insert(__mtapi_remote_task_list, (void *) taskInfo);	
+	mcapi_msg_send(__send_endpoint, remoteEndpt, &buffer, send_size, MCAPI_MAX_PRIORITY, &mcapi_status);
+	if(mcapi_status != MCAPI_SUCCESS) {
+		printf("sending error\n");
+	}
+
+	/* wait on acknowledgement */
+	mcapi_msg_recv(__send_endpoint, &buffer, MCAPI_MAX_MSG_SIZE, &size, &mcapi_status);
+	if (mcapi_status != MCAPI_SUCCESS) {
+		printf("receiving error\n");
+	}
+	
+
+	__unmarshallMessage(buffer, size, msg);
+	memcpy(&taskInfo->external_task_id, msg->buffer, sizeof(unsigned));
+	mutex_lock(&taskInfo->action->mutex);
+	taskInfo->action->running++;
+	mutex_unlock(&taskInfo->action->mutex);
+	return taskInfo;
+}
+
+/**
+ * Create a task and send the task to a remote processor when the action 
+ * associated with this queue object is a remote action. Then the task is
+ * inserted into the queue object. The tasks associated with a queue 
+ * object must be executed sequentially.
+ *
+ * If this function is called inside a task function, the created task
+ * will be the child task of the task which creates it.
+ */
+mtapiRT_TaskInfo_t * mtapiRT_startRemoteTaskQueue(
+		mtapiRT_QueueInfo_t *queue,
+		MTAPI_IN mtapi_task_id_t task_id,
+		mtapiRT_ActionInfo_t * action,
+		MTAPI_IN void * arguments,
+		MTAPI_IN mtapi_size_t arguments_size,
+		MTAPI_OUT void * result_buffer,
+		MTAPI_IN mtapi_size_t result_size,
+		MTAPI_IN mtapi_task_attributes_t * attributes,
+		MTAPI_OUT mtapi_status_t *status
+		)
+{
+	mcapi_endpoint_t remoteEndpt;
+	mcapi_status_t mcapi_status;
+	mtapiRT_TaskInfo_t *taskInfo;
+	char buffer[MCAPI_MAX_MSG_SIZE];
+	unsigned bufferSize;
+	unsigned send_size;
+	size_t size;
+	if (action->status != MTAPIRT_ACTION_CREATED) {
+		*status = MTAPI_ERR_ACTION_INVALID;
+		return MTAPI_NULL;
+	}
+	taskInfo = (mtapiRT_TaskInfo_t *) malloc (sizeof(mtapiRT_TaskInfo_t));
+	taskInfo->queue = queue;
+	taskInfo->queueID = queue->internal_queue_id;
+	taskInfo->task_id = task_id;
+	taskInfo->internal_task_id = __mtapi_task_id++;
+	taskInfo->action = action;
+	taskInfo->arguments = arguments;
+	taskInfo->argument_size = arguments_size;
+	taskInfo->result_buffer = result_buffer;
+	taskInfo->result_size = result_size;
+	taskInfo->attributes = attributes;
+	taskInfo->context = (mtapi_task_context_t *) malloc (sizeof(mtapi_task_context_t));
+	taskInfo->context->status = MTAPI_TASK_SCHEDULED;
+	taskInfo->context->num_core = NUM_WORKER;
+	mutex_init(&taskInfo->mutex);
+	/* get remote endpoint */
+	remoteEndpt = mcapi_endpoint_get(
+		NODE_INFOS[action->location.init_node].domain,
+		NODE_INFOS[action->location.init_node].node + 1,
+		NODE_INFOS[action->location.init_node].lst_recv_port,
+		MCAPI_TIMEOUT_INFINITE,
+		&mcapi_status
+			);
+	/* initialize Remote Task Info */
+	mtapiRT_RemoteTaskInfo_t * remoteTaskInfo;
+	remoteTaskInfo = (mtapiRT_RemoteTaskInfo_t *) malloc (sizeof(mtapiRT_RemoteTaskInfo_t));
+	remoteTaskInfo->task_id = task_id;
+	remoteTaskInfo->job_id = action->jobID;
+	remoteTaskInfo->arguments_size = arguments_size;
+	remoteTaskInfo->result_buffer = MTAPI_NULL;
+	remoteTaskInfo->result_size = result_size;
+
+	/* pack remoteTaskInfo into a message */
+	mtapiRT_Message_t * msg;
+	msg = (mtapiRT_Message_t *) malloc (sizeof(mtapiRT_Message_t));
+	msg->type = MTAPIRT_MSG_START_TASK;
+	msg->sender_domain = __mtapi_domain;
+	msg->sender_node = __mtapi_node;
+	msg->port = 0;
+	msg->buffer = (void *) remoteTaskInfo;
+	msg->buffer_size = sizeof(mtapiRT_RemoteTaskInfo_t);
+	/* pack msg and argmuments into a buffer to send */
+	bufferSize = __marshallMessage(msg, buffer);
+	memcpy(&buffer[bufferSize], arguments, arguments_size);
+	send_size = bufferSize + arguments_size;
+
+	while (1) {
+		mutex_lock(&queue->mutex);
+		if (queue->avail == MTAPI_TRUE) {
+        		list_insert(__mtapi_remote_task_list, (void *) taskInfo);	
+			mcapi_msg_send(__send_endpoint, remoteEndpt, &buffer, send_size, MCAPI_MAX_PRIORITY, &mcapi_status);
+			queue->avail = MTAPI_FALSE;
+			mutex_unlock(&queue->mutex);
+			if(mcapi_status != MCAPI_SUCCESS) {
+			printf("sending error\n");
+			}		
+
+			/* wait on acknowledgement */
+			mcapi_msg_recv(__send_endpoint, &buffer, MCAPI_MAX_MSG_SIZE, &size, &mcapi_status);
+			if (mcapi_status != MCAPI_SUCCESS) {
+			printf("receiving error\n");
+			}
+	
+
+			__unmarshallMessage(buffer, size, msg);
+			memcpy(&taskInfo->external_task_id, msg->buffer, sizeof(unsigned));
+			mtapiRT_waitForRemoteTask(taskInfo, MCAPI_TIMEOUT_INFINITE, status);
+			mutex_lock(&queue->mutex);
+			queue->avail = MTAPI_TRUE;
+			mutex_unlock(&queue->mutex);
+			break;
+		} else {
+			mutex_unlock(&queue->mutex);
+			mtapiRT_TaskInfo_t * next;
+			queue_lock(__task_queue);
+			next = (mtapiRT_TaskInfo_t *) queue_dequeue(__task_queue);
+			queue_unlock(__task_queue);
+			if (next != MTAPI_NULL)
+				mtapiRT_switchTask(next);
+		}
+	}
+	
+	return taskInfo;
+}
+/*
+ * This function deletes the task when the task is completed.
+ */
+
+void mtapiRT_deleteTask(mtapiRT_TaskInfo_t * task,
+			MTAPI_OUT mtapi_status_t * status
+			)
+{
+	mutex_lock(&task->mutex);
+	free(task->context);
+	mutex_unlock(&task->mutex);
+	free(task);	
+	*status = MTAPI_SUCCESS;
+}
+
+/**
+ * This function returns until the local task is completed. If the task 
+ * and its child tasks  (if any)
+ * are not completed yet, this function will fetch an available task from 
+ * local task queue and switch to the new task.
+ *
+ * The function decides whether a task is completed or not by checking
+ * the task status.
+ */
+
+mtapiRT_TaskInfo_t * mtapiRT_waitForLocalTask(mtapiRT_TaskInfo_t * task,
+			      MTAPI_IN mtapi_timeout_t timeout,
+			      MTAPI_OUT mtapi_status_t *status)
+{
+	mtapiRT_TaskInfo_t * tmp;
+	mtapiRT_TaskInfo_t * next;
+	int tag = 0;
+	tmp = (mtapiRT_TaskInfo_t *) malloc (sizeof(mtapiRT_TaskInfo_t));
+	while(1) {
+		/* if task has children */
+		switch (task->context->status) {
+			case MTAPI_TASK_COMPLETED : 
+				tag = 1;
+				break;
+			case MTAPI_TASK_CANCELLED:
+				tag = 2;
+				break;
+		}
+		if (tag == 1) {
+			*status = MTAPI_SUCCESS;
+			tmp->result_buffer = task->result_buffer;
+			tmp->result_size = task->result_size;
+			if (!task->FromRemote)
+				mtapiRT_deleteTask(task, status);
+			return tmp;
+		}
+		if (tag == 2) {
+			switch (task->action->status) {
+				case MTAPIRT_ACTION_DELETED:
+					*status = MTAPI_ERR_ACTION_DELETED;
+					return MTAPI_NULL;
+				case MTAPIRT_ACTION_NULL:
+				case MTAPIRT_ACTION_INITIALIZED:
+				case MTAPIRT_ACTION_CREATED:
+				case MTAPIRT_ACTION_DISABLED:
+					*status = MTAPI_ERR_ACTION_DISABLED;
+					return MTAPI_NULL;
+				case MTAPIRT_ACTION_ENABLE:
+					break;
+			}
+
+		}
+		if (__current_task->num_children != 0) {
+			queue_lock(__task_queue);
+			next = (mtapiRT_TaskInfo_t *) queue_dequeue(__task_queue);
+			queue_unlock(__task_queue);
+			if (next != MTAPI_NULL)
+				mtapiRT_switchTask(next);
+		}
+	}
+}
+
+/**
+ * This function returns until the remote task is completed. If the task 
+ * and its child tasks (if any) are
+ * not completed yet, this function will fetch an available task from local
+ * task queue and switch to it.
+ *
+ * The function decides whether a task is completed by checking the task 
+ * status.
+ */
+void mtapiRT_waitForRemoteTask(mtapiRT_TaskInfo_t * task,
+			       MTAPI_IN mtapi_timeout_t timeout,
+			       MTAPI_OUT mtapi_status_t * status)
+{
+	mtapiRT_TaskInfo_t * next;
+
+	while (1) {
+		if (task->context->status == MTAPI_TASK_COMPLETED) {
+
+
+			/* delete task */
+			return;
+		}
+		queue_lock(__task_queue);
+		next = (mtapiRT_TaskInfo_t *) queue_dequeue(__task_queue);
+		queue_unlock(__task_queue);
+		if (next != MTAPI_NULL)
+			mtapiRT_switchTask(next);
+	}
+}
+
+/** 
+ * This function returns the job object associated with a job identifier.
+ */
+mtapiRT_JobInfo_t * mtapiRT_getJob(
+		MTAPI_IN mtapi_job_id_t job_id,
+	        MTAPI_OUT mtapi_status_t *status)
+{
+	*status = MTAPI_SUCCESS;
+	return &__mtapi_jobs[job_id];
+}
+
+/** 
+ * This function returns the local action object associated with a 
+ * specified job object.
+ */
+mtapiRT_ActionInfo_t * mtapiRT_getLocalAction(mtapiRT_JobInfo_t * job, mtapi_status_t *status) 
+{	
+	if (job->actions == MTAPI_NULL || job->actions->type != MTAPIRT_ACTION_LOCAL) {
+		*status = MTAPI_ERR_ACTION_INVALID;
+		return MTAPI_NULL;
+	}	
+	*status = MTAPI_SUCCESS;
+	return job->actions;
+}
+
+/** 
+ * This function returns the task object associated with a specified task
+ * internal_id from a task queue.
+ */
+mtapiRT_TaskInfo_t * mtapiRT_getTask(unsigned tid, mtapi_status_t * status) 
+{
+	int i;
+	int queue_size;
+	int max_queue_size;
+	mtapiRT_TaskInfo_t * task;
+	queue_size = queue_getsize(__completed_task_queue);
+	max_queue_size = queue_maxsize();
+
+	for (i = 0; i < queue_size; i++) {
+		task = (mtapiRT_TaskInfo_t *) __completed_task_queue->elements[(__task_queue->head + i) % max_queue_size];
+		if (task != NULL && task->internal_task_id == tid) {
+			*status = MTAPI_SUCCESS;
+			return task;
+		}
+	}
+	return MTAPI_NULL;
+}
+/**
+ * This function switches to execute an available task.
+ */
+void mtapiRT_switchTask(mtapiRT_TaskInfo_t *task) 
+{
+	mtapiRT_TaskInfo_t *orig_task;
+	mtapi_status_t mtapi_status;
+	if (task->action->status != MTAPIRT_ACTION_CREATED) {
+		task->context->status = MTAPI_TASK_CANCELLED;
+		return;
+	}
+	orig_task = __current_task;
+	__current_task = task;
+	task->action->location.fptr(
+			task->arguments,
+			task->argument_size,
+			task->result_buffer,
+			task->result_size,
+			task->action->local_data,
+			task->action->local_data_size,
+			(mtapi_task_context_t * const) task->context);
+	task->context->status = MTAPI_TASK_COMPLETED;
+	if (task->queue != MTAPI_NULL) {
+		mutex_lock (&task->queue->mutex);
+		task->queue->avail = MTAPI_TRUE;
+		mutex_unlock(&task->queue->mutex);
+	}
+	
+	/* in case the parent is null */
+	if (task->parent)
+		task->parent->num_children--;
+	__current_task = orig_task;
+	if (task->FromRemote == 1) {
+		mtapiRT_sendResult(task, task->init_node, &mtapi_status);
+	}
+
+}
+
+/**
+ * This function creates an queue object.
+ */
+mtapiRT_QueueInfo_t * mtapiRT_createQueue (
+		MTAPI_IN mtapi_queue_id_t queue_id,
+		mtapiRT_JobInfo_t * job,
+		mtapiRT_ActionInfo_t * action,
+		MTAPI_IN mtapi_queue_attributes_t * attributes,
+		MTAPI_OUT mtapi_status_t * status
+		)
+{
+	mtapiRT_QueueInfo_t * queueObj;
+	queueObj = (mtapiRT_QueueInfo_t *) malloc (sizeof(mtapiRT_QueueInfo_t));
+	queueObj->avail = MTAPI_TRUE;
+	queueObj->external_queue_id = queue_id;
+	mutex_lock(&__mtapi_queue_id_mutex);
+	queueObj->internal_queue_id = __mtapi_queue_id++;
+	mutex_unlock(&__mtapi_queue_id_mutex);
+	queueObj->job = job;
+	queueObj->action = action;
+	queueObj->seq_task_queue = (queue_t *) malloc (sizeof(queue_t));
+	queue_init(queueObj->seq_task_queue);
+	mutex_init(&queueObj->mutex);
+	*status = MTAPI_SUCCESS;
+	queueGroup[0] =  queueObj;
+	return queueObj;
+}
+
+/**
+ * This function sends the result of a completed task which is from a 
+ * remote processor back to the remote processor.
+ */
+void mtapiRT_sendResult(mtapiRT_TaskInfo_t * task, unsigned node, mtapi_status_t * status)
+{
+	mcapi_endpoint_t remoteEndpt;
+	mcapi_status_t mcapi_status;
+	mtapiRT_Message_t *message;
+	mtapiRT_Message_t *message2;
+	char buffer[MCAPI_MAX_MSG_SIZE];
+	char buffer2[MCAPI_MAX_MSG_SIZE];
+	char send_buffer[MCAPI_MAX_MSG_SIZE];
+	mtapi_uint_t bufferSize;
+	unsigned send_size;
+	size_t recv_size;
+	int ack;
+//	sleep(5);
+
+	
+	ack = 1;
+	remoteEndpt = mcapi_endpoint_get(
+			NODE_INFOS[node].domain,
+			NODE_INFOS[node].node + 1,
+			NODE_INFOS[node].lst_recv_port,
+			MCAPI_TIMEOUT_INFINITE,
+			&mcapi_status
+			);
+	//TODO: copy the internal_task_id to the first place of buffer. 
+	// internal_task_id here is the external_id in remote side
+	// once receive acknowlegement delete the task
+	// the remote process find the task from list? twice traverse
+	// ??
+	memcpy(&buffer[0], (char *)&task->internal_task_id, sizeof(unsigned));
+	memcpy(&buffer[sizeof(unsigned)], task->result_buffer, task->result_size);
+	bufferSize = sizeof(unsigned) + task->result_size;
+
+	/* initialize message */
+	message = (mtapiRT_Message_t *) malloc (sizeof(mtapiRT_Message_t));
+	message2 = (mtapiRT_Message_t *) malloc (sizeof(mtapiRT_Message_t));
+
+	message->type = MTAPIRT_MSG_COMPLETE_TASK;
+	message->sender_domain = __mtapi_domain;
+	message->sender_node = __mtapi_node;
+	message->port = 0; /* all the port is 0 except for listener*/
+	message->buffer = buffer;
+	message->buffer_size = bufferSize;
+
+
+	send_size = __marshallMessage(message, send_buffer);
+	while (ack) {	
+		mcapi_msg_send(__send_endpoint, remoteEndpt, &send_buffer, send_size, MCAPI_MAX_PRIORITY, &mcapi_status);
+		mcapi_msg_recv(__send_endpoint, &buffer2, MCAPI_MAX_MSG_SIZE, &recv_size, &mcapi_status);
+		__unmarshallMessage(buffer2, recv_size, message2);
+		
+		switch (message2->type) {
+			case MTAPIRT_MSG_ACK:
+				/* delete task */
+				ack = 0;
+				break;
+			case MTAPIRT_MSG_SYNC:
+			case MTAPIRT_MSG_NACK:
+			case MTAPIRT_MSG_GET_ACTION:
+			case MTAPIRT_MSG_START_TASK:
+			case MTAPIRT_MSG_CANCEL_TASK:
+			case MTAPIRT_MSG_COMPLETE_TASK:
+			case MTAPIRT_MSG_WAIT_TASK:
+			case MTAPIRT_MSG_UPDATE_ACTION:
+			case MTAPIRT_MSG_UPDATE_ACTION_2:
+			case MTAPIRT_MSG_CREATE_ACTION:
+			case MTAPIRT_MSG_DELETE_ACTION:
+			case MTAPIRT_MSG_DISABLE_ACTION:
+			case MTAPIRT_MSG_ENABLE_ACTION:
+				break;
+		}
+	}
+	/* TODO: wait for acknowledgement */
+	/* is this necessary ?*/
+}
+
+void mtapiRT_initNodeAttribute (
+	MTAPI_OUT mtapi_node_attributes_t * attributes,
+	MTAPI_OUT mtapi_status_t * status
+	)
+{
+	memset(attributes, 0, sizeof(mtapi_node_attributes_t));
+	*status = MTAPI_SUCCESS;
+}
+
+void mtapiRT_setNodeAttribute (
+	MTAPI_INOUT mtapi_node_attributes_t * attributes,
+	MTAPI_IN mtapi_uint_t attribute_num,
+	MTAPI_IN void * attribute,
+	MTAPI_IN mtapi_size_t attribute_size,
+	MTAPI_OUT mtapi_status_t * status
+	)
+{
+	if (attribute_size != sizeof(mtapi_uint_t)) {
+		* status = MTAPI_ERR_ATTR_SIZE;
+		return;
+	}
+	switch (attribute_num) {
+		case MTAPI_NODE_NUMCORES :
+			attributes->entries[attribute_num].valid = MTAPI_TRUE;
+			attributes->entries[attribute_num].attribute_num = attribute_num;
+			attributes->entries[attribute_num].bytes = attribute_size;
+			attributes->entries[attribute_num].attribute_d = malloc (attribute_size);
+			memcpy(attributes->entries[attribute_num].attribute_d, attribute, attribute_size);
+			* status = MTAPI_SUCCESS;
+			break;
+		default:
+			*status =  MTAPI_ERR_ATTR_NUM;
+			break;
+	}
+}
+
+void mtapiRT_getNodeAttribute (
+	MTAPI_IN mtapi_node_t node,
+	MTAPI_IN mtapi_uint_t attribute_num,
+	MTAPI_OUT void * attribute,
+	MTAPI_IN mtapi_size_t attribute_size,
+	MTAPI_OUT mtapi_status_t * status
+	)
+{
+	switch (attribute_num) {
+		case MTAPI_NODE_NUMCORES :
+			if (attribute_size != sizeof(mtapi_uint_t)) {
+				* status = MTAPI_ERR_ATTR_SIZE;
+				return;
+			}
+			if (__mtapi_node_attributes) {
+				memcpy (attribute, __mtapi_node_attributes->entries[attribute_num].attribute_d, attribute_size);
+				* status = MTAPI_SUCCESS;
+				break;
+			} else {
+				printf("node attribute NULL\n");
+				* status = MTAPI_SUCCESS;
+				break;
+			}
+		default:
+			*status = MTAPI_ERR_ATTR_NUM;
+			break;
+	}
+}
+
+void mtapiRT_initActionAttribute (
+	MTAPI_OUT mtapi_action_attributes_t * attributes,
+	MTAPI_OUT mtapi_status_t * status
+	)
+{
+	if (mtapiRT_nodeInitialized(status)) {
+		memset(attributes, 0, sizeof(mtapi_action_attributes_t));
+		*status = MTAPI_SUCCESS;
+	} else {
+		* status = MTAPI_ERR_NODE_NOTINIT;
+	}
+}
+void mtapiRT_setActionAttribute (
+	MTAPI_INOUT mtapi_action_attributes_t * attributes,
+	MTAPI_IN mtapi_uint_t attribute_num,
+	MTAPI_IN void * attribute,
+	MTAPI_IN mtapi_size_t attribute_size,
+	MTAPI_OUT mtapi_status_t * status
+	)
+{
+	switch (attribute_num) {
+		case MTAPI_ACTION_GLOBAL :
+			if (attribute_size != sizeof(mtapi_boolean_t)) {
+				printf("attribute size dont match\n");
+				* status = MTAPI_ERR_ATTR_SIZE;
+				return; 
+			}
+			attributes->entries[attribute_num].valid = MTAPI_TRUE;
+			attributes->entries[attribute_num].attribute_num = attribute_num;
+			attributes->entries[attribute_num].bytes = attribute_size;
+			attributes->entries[attribute_num].attribute_d = malloc (attribute_size);
+			memcpy(attributes->entries[attribute_num].attribute_d, attribute, attribute_size);
+			* status = MTAPI_SUCCESS;
+			break;
+
+		case MTAPI_ACTION_AFFINITY :
+			if (attribute_size != sizeof(mtapi_affinity_t)) {
+				printf("attribute size dont match\n");
+				* status = MTAPI_ERR_ATTR_SIZE;
+				return; 
+			}
+			attributes->entries[attribute_num].valid = MTAPI_TRUE;
+			attributes->entries[attribute_num].attribute_num = attribute_num;
+			attributes->entries[attribute_num].bytes = attribute_size;
+			attributes->entries[attribute_num].attribute_d = malloc (attribute_size);
+			memcpy(attributes->entries[attribute_num].attribute_d, attribute, attribute_size);
+			* status = MTAPI_SUCCESS;
+			break;
+
+		case MTAPI_DOMAIN_SHARED :
+			if (attribute_size != sizeof(mtapi_boolean_t)) {
+				printf("attribute size dont match\n");
+				* status = MTAPI_ERR_ATTR_SIZE;
+				return; 
+			}
+			attributes->entries[attribute_num].valid = MTAPI_TRUE;
+			attributes->entries[attribute_num].attribute_num = attribute_num;
+			attributes->entries[attribute_num].bytes = attribute_size;
+			attributes->entries[attribute_num].attribute_d = malloc (attribute_size);
+			memcpy(attributes->entries[attribute_num].attribute_d, attribute, attribute_size);
+			* status = MTAPI_SUCCESS;
+			break;
+		default:
+			*status =  MTAPI_ERR_ATTR_NUM;
+			break;
+	}
+}
+void mtapiRT_getActionAttribute (
+	MTAPI_IN mtapi_action_attributes_t * attributes,
+	MTAPI_IN mtapi_uint_t attribute_num,
+	MTAPI_OUT void * attribute,
+	MTAPI_IN mtapi_size_t attribute_size,
+	MTAPI_OUT mtapi_status_t * status
+	)
+{
+	switch (attribute_num) {
+		case MTAPI_ACTION_GLOBAL :
+			if (attribute_size != sizeof(mtapi_boolean_t)) {
+				* status = MTAPI_ERR_ATTR_SIZE;
+			} else  {
+				memcpy (attribute, attributes->entries[attribute_num].attribute_d, attribute_size);
+				* status = MTAPI_SUCCESS;
+			}
+			break;
+		case MTAPI_ACTION_AFFINITY :
+			if (attribute_size != sizeof(mtapi_affinity_t)) {
+				* status = MTAPI_ERR_ATTR_SIZE;
+			} else  {
+				memcpy (attribute, attributes->entries[attribute_num].attribute_d, attribute_size);
+				* status = MTAPI_SUCCESS;
+			}
+			break;
+		case MTAPI_DOMAIN_SHARED :
+			if (attribute_size != sizeof(mtapi_boolean_t)) {
+				* status = MTAPI_ERR_ATTR_SIZE;
+			} else  {
+				memcpy (attribute, attributes->entries[attribute_num].attribute_d, attribute_size);
+				* status = MTAPI_SUCCESS;
+			}
+			break;
+		default:
+			*status = MTAPI_ERR_ATTR_NUM;
+			break;
+	}
+}
+void mtapiRT_initQueueAttribute (
+	MTAPI_OUT mtapi_queue_attributes_t * attributes,
+	MTAPI_OUT mtapi_status_t * status
+	)
+{
+	if (mtapiRT_nodeInitialized(status)) {
+		memset(attributes, 0, sizeof(mtapi_queue_attributes_t));
+		*status = MTAPI_SUCCESS;
+	} else {
+		* status = MTAPI_ERR_NODE_NOTINIT;
+	}
+}
+void mtapiRT_setQueueAttribute (
+	MTAPI_INOUT mtapi_queue_attributes_t * attributes,
+	MTAPI_IN mtapi_uint_t attribute_num,
+	MTAPI_IN void * attribute,
+	MTAPI_IN mtapi_size_t attribute_size,
+	MTAPI_OUT mtapi_status_t * status
+	)
+{
+	switch (attribute_num) {
+		case MTAPI_QUEUE_GLOBAL :
+			if (attribute_size != sizeof(mtapi_boolean_t)) {
+				printf("attribute size dont match\n");
+				* status = MTAPI_ERR_ATTR_SIZE;
+				return; 
+			}
+			attributes->entries[attribute_num].valid = MTAPI_TRUE;
+			attributes->entries[attribute_num].attribute_num = attribute_num;
+			attributes->entries[attribute_num].bytes = attribute_size;
+			attributes->entries[attribute_num].attribute_d = malloc (attribute_size);
+			memcpy(attributes->entries[attribute_num].attribute_d, attribute, attribute_size);
+			* status = MTAPI_SUCCESS;
+			break;
+
+		case MTAPI_QUEUE_PRIORITY :
+			if (attribute_size != sizeof(mtapi_uint_t)) {
+				printf("attribute size dont match\n");
+				* status = MTAPI_ERR_ATTR_SIZE;
+				return; 
+			}
+			attributes->entries[attribute_num].valid = MTAPI_TRUE;
+			attributes->entries[attribute_num].attribute_num = attribute_num;
+			attributes->entries[attribute_num].bytes = attribute_size;
+			attributes->entries[attribute_num].attribute_d = malloc (attribute_size);
+			memcpy(attributes->entries[attribute_num].attribute_d, attribute, attribute_size);
+			* status = MTAPI_SUCCESS;
+			break;
+
+		case MTAPI_QUEUE_LIMIT :
+			if (attribute_size != sizeof(mtapi_uint_t)) {
+				printf("attribute size dont match\n");
+				* status = MTAPI_ERR_ATTR_SIZE;
+				return; 
+			}
+			attributes->entries[attribute_num].valid = MTAPI_TRUE;
+			attributes->entries[attribute_num].attribute_num = attribute_num;
+			attributes->entries[attribute_num].bytes = attribute_size;
+			attributes->entries[attribute_num].attribute_d = malloc (attribute_size);
+			memcpy(attributes->entries[attribute_num].attribute_d, attribute, attribute_size);
+			* status = MTAPI_SUCCESS;
+			break;
+		case MTAPI_QUEUE_ORDERED :
+			if (attribute_size != sizeof(mtapi_boolean_t)) {
+				printf("attribute size dont match\n");
+				* status = MTAPI_ERR_ATTR_SIZE;
+				return; 
+			}
+			attributes->entries[attribute_num].valid = MTAPI_TRUE;
+			attributes->entries[attribute_num].attribute_num = attribute_num;
+			attributes->entries[attribute_num].bytes = attribute_size;
+			attributes->entries[attribute_num].attribute_d = malloc (attribute_size);
+			memcpy(attributes->entries[attribute_num].attribute_d, attribute, attribute_size);
+			* status = MTAPI_SUCCESS;
+			break;
+
+		case MTAPI_QUEUE_RETAIN :
+			if (attribute_size != sizeof(mtapi_boolean_t)) {
+				printf("attribute size dont match\n");
+				* status = MTAPI_ERR_ATTR_SIZE;
+				return; 
+			}
+			attributes->entries[attribute_num].valid = MTAPI_TRUE;
+			attributes->entries[attribute_num].attribute_num = attribute_num;
+			attributes->entries[attribute_num].bytes = attribute_size;
+			attributes->entries[attribute_num].attribute_d = malloc (attribute_size);
+			memcpy(attributes->entries[attribute_num].attribute_d, attribute, attribute_size);
+			* status = MTAPI_SUCCESS;
+			break;
+
+		case MTAPI_DOMAIN_SHARED :
+			if (attribute_size != sizeof(mtapi_boolean_t)) {
+				printf("attribute size dont match\n");
+				* status = MTAPI_ERR_ATTR_SIZE;
+				return; 
+			}
+			attributes->entries[attribute_num].valid = MTAPI_TRUE;
+			attributes->entries[attribute_num].attribute_num = attribute_num;
+			attributes->entries[attribute_num].bytes = attribute_size;
+			attributes->entries[attribute_num].attribute_d = malloc (attribute_size);
+			memcpy(attributes->entries[attribute_num].attribute_d, attribute, attribute_size);
+			* status = MTAPI_SUCCESS;
+			break;
+		default:
+			*status =  MTAPI_ERR_ATTR_NUM;
+			break;
+	}
+}
+
+void mtapiRT_getQueueAttribute (
+	MTAPI_IN mtapi_queue_attributes_t * attributes,
+	MTAPI_IN mtapi_uint_t attribute_num,
+	MTAPI_OUT void * attribute,
+	MTAPI_IN mtapi_size_t attribute_size,
+	MTAPI_OUT mtapi_status_t * status
+	)
+{
+	switch (attribute_num) {
+		case MTAPI_QUEUE_GLOBAL :
+			if (attribute_size != sizeof(mtapi_boolean_t)) {
+				* status = MTAPI_ERR_ATTR_SIZE;
+			} else  {
+				memcpy (attribute, attributes->entries[attribute_num].attribute_d, attribute_size);
+				* status = MTAPI_SUCCESS;
+			}
+			break;
+		case MTAPI_QUEUE_PRIORITY :
+			if (attribute_size != sizeof(mtapi_uint_t)) {
+				* status = MTAPI_ERR_ATTR_SIZE;
+			} else  {
+				memcpy (attribute, attributes->entries[attribute_num].attribute_d, attribute_size);
+				* status = MTAPI_SUCCESS;
+			}
+			break;
+		case MTAPI_QUEUE_LIMIT :
+			if (attribute_size != sizeof(mtapi_uint_t)) {
+				* status = MTAPI_ERR_ATTR_SIZE;
+			} else  {
+				memcpy (attribute, attributes->entries[attribute_num].attribute_d, attribute_size);
+				* status = MTAPI_SUCCESS;
+			}
+			break;
+		case MTAPI_QUEUE_ORDERED :
+			if (attribute_size != sizeof(mtapi_boolean_t)) {
+				* status = MTAPI_ERR_ATTR_SIZE;
+			} else  {
+				memcpy (attribute, attributes->entries[attribute_num].attribute_d, attribute_size);
+				* status = MTAPI_SUCCESS;
+			}
+			break;
+		case MTAPI_QUEUE_RETAIN :
+			if (attribute_size != sizeof(mtapi_uint_t)) {
+				* status = MTAPI_ERR_ATTR_SIZE;
+			} else  {
+				memcpy (attribute, attributes->entries[attribute_num].attribute_d, attribute_size);
+				* status = MTAPI_SUCCESS;
+			}
+			break;
+		case MTAPI_DOMAIN_SHARED :
+			if (attribute_size != sizeof(mtapi_uint_t)) {
+				* status = MTAPI_ERR_ATTR_SIZE;
+			} else  {
+				memcpy (attribute, attributes->entries[attribute_num].attribute_d, attribute_size);
+				* status = MTAPI_SUCCESS;
+			}
+			break;
+		default:
+			*status = MTAPI_ERR_ATTR_NUM;
+			break;
+	}
+}
+
+void mtapiRT_initTaskAttribute (
+	MTAPI_OUT mtapi_task_attributes_t * attributes,
+	MTAPI_OUT mtapi_status_t * status
+	)
+{
+	if (mtapiRT_nodeInitialized(status)) {
+		memset(attributes, 0, sizeof(mtapi_task_attributes_t));
+		*status = MTAPI_SUCCESS;
+	} else {
+		* status = MTAPI_ERR_NODE_NOTINIT;
+	}
+}
+void mtapiRT_setTaskAttribute (
+	MTAPI_INOUT mtapi_task_attributes_t * attributes,
+	MTAPI_IN mtapi_uint_t attribute_num,
+	MTAPI_IN void * attribute,
+	MTAPI_IN mtapi_size_t attribute_size,
+	MTAPI_OUT mtapi_status_t * status
+	)
+{
+	switch (attribute_num) {
+		case MTAPI_TASK_DETACHED :
+			if (attribute_size != sizeof(mtapi_boolean_t)) {
+				printf("attribute size dont match\n");
+				* status = MTAPI_ERR_ATTR_SIZE;
+				return; 
+			}
+			attributes->entries[attribute_num].valid = MTAPI_TRUE;
+			attributes->entries[attribute_num].attribute_num = attribute_num;
+			attributes->entries[attribute_num].bytes = attribute_size;
+			attributes->entries[attribute_num].attribute_d = malloc (attribute_size);
+			memcpy(attributes->entries[attribute_num].attribute_d, attribute, attribute_size);
+			* status = MTAPI_SUCCESS;
+			break;
+
+		case MTAPI_TASK_INSTANCES :
+			if (attribute_size != sizeof(mtapi_uint_t)) {
+				printf("attribute size dont match\n");
+				* status = MTAPI_ERR_ATTR_SIZE;
+				return; 
+			}
+			attributes->entries[attribute_num].valid = MTAPI_TRUE;
+			attributes->entries[attribute_num].attribute_num = attribute_num;
+			attributes->entries[attribute_num].bytes = attribute_size;
+			attributes->entries[attribute_num].attribute_d = malloc (attribute_size);
+			memcpy(attributes->entries[attribute_num].attribute_d, attribute, attribute_size);
+			* status = MTAPI_SUCCESS;
+			break;
+
+		default:
+			*status =  MTAPI_ERR_ATTR_NUM;
+			break;
+	}
+}
+
+void mtapiRT_getTaskAttribute (
+	MTAPI_IN mtapi_task_attributes_t * attributes,
+	MTAPI_IN mtapi_uint_t attribute_num,
+	MTAPI_OUT void * attribute,
+	MTAPI_IN mtapi_size_t attribute_size,
+	MTAPI_OUT mtapi_status_t * status
+	)
+{
+	switch (attribute_num) {
+		case MTAPI_TASK_DETACHED :
+			if (attribute_size != sizeof(mtapi_boolean_t)) {
+				* status = MTAPI_ERR_ATTR_SIZE;
+			} else  {
+				memcpy (attribute, attributes->entries[attribute_num].attribute_d, attribute_size);
+				* status = MTAPI_SUCCESS;
+			}
+			break;
+		case MTAPI_TASK_INSTANCES :
+			if (attribute_size != sizeof(mtapi_uint_t)) {
+				* status = MTAPI_ERR_ATTR_SIZE;
+			} else  {
+				memcpy (attribute, attributes->entries[attribute_num].attribute_d, attribute_size);
+				* status = MTAPI_SUCCESS;
+			}
+			break;
+		default:
+			*status = MTAPI_ERR_ATTR_NUM;
+			break;
+	}
+}
+
+void mtapiRT_initAffinity (
+	MTAPI_OUT mtapi_affinity_t * mask,
+	MTAPI_IN mtapi_boolean_t affinity,
+	MTAPI_OUT mtapi_status_t * status
+		)
+{
+	/*
+	int i;
+	if (affinity) {
+		CPU_ZERO(&mask->mtapi_cpu_set);
+		for (i = 0; i < NUM_WORKER; i++) {
+			CPU_SET(i, &mask->mtapi_cpu_set);
+		}
+	} else {
+		CPU_ZERO(&mask->mtapi_cpu_set);
+	}
+	*status = MTAPI_SUCCESS;
+	*/
+	int i;
+	int m_cur = 0x0001;
+	if (affinity) {
+		for (i = 0; i < NUM_WORKER; i++) {
+			m_bit = m_bit | m_cur;
+			m_cur = 1 << m_cur;
+		}
+	}
+	* status = MTAPI_SUCCESS;
+}
+
+void mtapiRT_setAffinity (
+	MTAPI_INOUT mtapi_affinity_t * mask,
+	MTAPI_IN mtapi_uint_t core_num,
+	MTAPI_IN mtapi_boolean_t affinity,
+	MTAPI_OUT mtapi_status_t * status
+	)
+{
+	/*
+	if (!(core_num < NUM_WORKER) || core_num < 0) {
+		* status = MTAPI_ERR_CORE_NUM;
+	} else 
+	if (affinity) {
+		CPU_SET(core_num, &mask->mtapi_cpu_set);
+		*status = MTAPI_SUCCESS;
+	} else {
+		CPU_CLR(core_num, &mask->mtapi_cpu_set);
+		*status = MTAPI_SUCCESS;
+	}
+	*/
+	int m_cur = 0x0001;
+	int i;
+	if (!(core_num < NUM_WORKER) || core_num < 0) {
+		* status = MTAPI_ERR_CORE_NUM;
+		return;
+	} else 
+	if (affinity) {
+		for (i = 0; i < core_num; i++) 
+			m_cur = 1 << m_cur;
+		m_bit = m_cur | m_bit;
+	} else {
+		for (i = 0; i < core_num; i++) 
+			m_cur = 1 << m_cur;
+		m_cur = ~m_cur;
+		m_bit = m_bit & m_cur;
+	}
+	* status = MTAPI_SUCCESS;
+}
+
+mtapi_boolean_t mtapiRT_getAffinity (
+	MTAPI_IN mtapi_affinity_t * mask,
+	MTAPI_IN mtapi_uint_t core_num,
+	MTAPI_OUT mtapi_status_t * status
+	)
+{
+	/*
+	cpu_set_t tmpSet, dest;
+	if (!(core_num < NUM_WORKER) || core_num < 0) {
+		* status = MTAPI_ERR_CORE_NUM;
+	} else {
+		CPU_ZERO(&tmpSet);
+		CPU_ZERO(&dest);
+		CPU_SET(core_num, &tmpSet);
+		CPU_AND(&dest, &mask->mtapi_cpu_set, &tmpSet);
+		if (CPU_COUNT(&dest))
+			return MTAPI_TRUE;
+		else 
+			return MTAPI_FALSE;
+	}
+	*/
+	int m_cur = 0x0001;
+	int i;
+	if (!(core_num < NUM_WORKER) || core_num < 0) {
+		* status = MTAPI_ERR_CORE_NUM;
+		return MTAPI_FALSE;
+	} else {
+		for (i = 0; i < core_num; i++) 
+			m_cur = 1 << m_cur;
+		m_cur = ~m_cur;
+		if (m_cur & m_bit) 
+			return MTAPI_TRUE;
+		else 
+			return MTAPI_FALSE;
+	}
+}
+/********************************************************************
+  	utility functions
+  ******************************************************************/
+
+/**
+ * This function returns the next available port id.
+ */
+int __getNextPortNum()
+{
+	int i;
+	mutex_lock(&__portMutex);
+	for (i = 3; i < MCAPI_MAX_ENDPOINTS; i++) {
+		if (__portNum[i] == 0) {
+			__portNum[i] = 1;
+			mutex_unlock(&__portMutex);
+			return i;
+		}
+	}
+	return 0;
+}
+
+/**
+ * This function releases a port id.
+ */
+
+void __freePort(int port_id) 
+{
+	mutex_lock(&__portMutex);
+	__portNum[port_id] = 0;
+	mutex_unlock(&__portMutex);
+}	
+
+/**
+ * This function marshall the message object to a buffer which will be 
+ * sent to remote processor through MCAPI.
+ */
+unsigned __marshallMessage(mtapiRT_Message_t *message, char * buffer) 
+{
+	unsigned i, type_size, sender_domain_size, sender_node_size, port_size;
+	type_size = sizeof(message->type);
+	sender_domain_size = sizeof(message->sender_domain);
+	sender_node_size = sizeof(message->sender_node);
+	port_size = sizeof(message->port);
+
+	memcpy(&buffer[0], &message->type, type_size);
+	memcpy(&buffer[type_size], &message->sender_domain, sender_domain_size);
+	memcpy(&buffer[type_size + sender_domain_size], &message->sender_node, sender_node_size);
+	memcpy(&buffer[type_size + sender_domain_size + sender_node_size], &message->port, port_size);
+	/*  copy message buffer to sending buffer  */
+	for (i = 0; i < message->buffer_size; i++) {
+		buffer[i + type_size + sender_domain_size + sender_node_size + port_size] = message->buffer[i];
+	}
+	/*  return size of marshalled buffer */
+	return (type_size + sender_domain_size + sender_node_size + port_size + message->buffer_size);
+}
+
+/**
+ *  This function recovers the message object from a buffer receiving from 
+ *  remote processor through MCAPI.
+ */
+mtapi_boolean_t __unmarshallMessage(char * buffer, unsigned buffer_size, mtapiRT_Message_t * message)
+{
+	unsigned type_size, sender_domain_size, sender_node_size, port_size;
+	type_size = sizeof(message->type);
+	sender_domain_size = sizeof(message->sender_domain);
+	sender_node_size = sizeof(message->sender_node);
+	port_size = sizeof(message->port);
+	message->buffer_size = buffer_size - (type_size + sender_domain_size + sender_node_size +port_size);
+
+	memcpy(&message->type, &buffer[0], type_size);
+	memcpy(&message->sender_domain, &buffer[type_size], sender_domain_size);
+	memcpy(&message->sender_node, &buffer[type_size + sender_domain_size], sender_node_size);
+	memcpy(&message->port, &buffer[type_size + sender_domain_size + sender_node_size], port_size);
+	/*  malloc a new space for message->buffer to store contants
+	    from receiving buffer */
+	char *new_buffer = (char *) malloc (message->buffer_size);
+	if (new_buffer == MTAPI_NULL) {
+		fprintf(stderr, "__unmarshallMessage: malloc failure\n");
+		return MTAPI_FALSE;
+	}
+	memcpy(new_buffer, &buffer[type_size + sender_domain_size + sender_node_size + port_size], message->buffer_size);
+	message->buffer = new_buffer;
+
+	return MTAPI_TRUE;
+}
+/**
+ * This function will create a task based on the information received and
+ * then insert the task into local task queue.
+ */
+void __lst_startTask(mtapiRT_Message_t * message, mcapi_endpoint_t sendEP, mcapi_endpoint_t recvEP)
+{	
+	int isFromRemote;
+	mtapi_status_t status;
+	mcapi_status_t mcapi_status;
+	mtapiRT_ActionInfo_t * action;
+	mtapiRT_TaskInfo_t * taskInfo;
+	mtapiRT_RemoteTaskInfo_t * remoteTaskInfo;
+	mtapiRT_Message_t answer;
+	unsigned answer_buffer_size;
+	char buffer[MCAPI_MAX_MSG_SIZE];
+	remoteTaskInfo = (mtapiRT_RemoteTaskInfo_t *) message->buffer;
+	void * arguments = malloc(remoteTaskInfo->arguments_size);
+	remoteTaskInfo->result_buffer = malloc(remoteTaskInfo->result_size);
+	memcpy(arguments, &message->buffer[sizeof(mtapiRT_RemoteTaskInfo_t)], remoteTaskInfo->arguments_size);
+
+	action = mtapiRT_getLocalAction(&__mtapi_jobs[remoteTaskInfo->job_id], &status);
+	isFromRemote = 1;
+	
+	
+	taskInfo = mtapiRT_startLocalTask(
+			isFromRemote,
+			remoteTaskInfo->node_id,	
+			remoteTaskInfo->task_id,
+			action,
+			arguments,
+			remoteTaskInfo->arguments_size,
+			remoteTaskInfo->result_buffer,
+			remoteTaskInfo->result_size,
+			MTAPI_NULL,
+			&status);
+
+	answer.type = MTAPIRT_MSG_ACK;
+	answer.sender_domain = __mtapi_domain;
+	answer.sender_node = __mtapi_node;
+	answer.port = NODE_INFOS[__mtapi_init_node_id].lst_recv_port;
+	answer.buffer = (char *)&taskInfo->internal_task_id;
+	answer.buffer_size = sizeof(unsigned);
+
+	answer_buffer_size = __marshallMessage(&answer, buffer);
+	mcapi_msg_send(
+			sendEP,
+			recvEP,
+			&buffer,
+			answer_buffer_size,
+			MCAPI_MAX_PRIORITY,
+			&mcapi_status
+			);
+}
+
+/**
+ * This function will check if the task is completed.
+ */ 
+
+void __lst_waitForTask(mtapiRT_Message_t * message, mcapi_endpoint_t sendEP, mcapi_endpoint_t recvEP)
+{
+	unsigned task_id;
+	mtapiRT_Message_t answer;
+	mtapiRT_TaskInfo_t *task_info;
+//	mtapiRT_TaskInfo_t *tmp;
+	mtapi_status_t mtapi_status;
+	mcapi_status_t mcapi_status;
+	unsigned bufferSize;
+	char buffer[MCAPI_MAX_MSG_SIZE];
+	memcpy(&task_id, message->buffer, message->buffer_size);
+
+	answer.type = MTAPIRT_MSG_NACK;
+	answer.sender_domain= __mtapi_domain;
+	answer.sender_node = __mtapi_node;
+	answer.port = NODE_INFOS[__mtapi_init_node_id].lst_recv_port;
+	answer.buffer = NULL;
+	answer.buffer_size = 0;
+
+	/* find the taskInfo from the __completed queue */
+	/* TODO there is a bug in this section		*
+	 * the complete task queue is not initialized 	*
+	 * there may be an unitialize part which has 	*
+	 * the same value of task_id			*/
+	task_info = mtapiRT_getTask(task_id, &mtapi_status);
+
+	if (task_info != MTAPI_NULL) {
+
+//		tmp = mtapiRT_waitForLocalTask(task_info, MTAPI_TIMEOUT_INFINITE, &mtapi_status);
+		answer.type = MTAPIRT_MSG_ACK;
+//		printf("result buffer = %p   arguments = %d  task_result = %d\n",task_info, *(int *)task_info->arguments,  *(int *) task_info->result_buffer);
+		answer.buffer = (char *)task_info->result_buffer;
+		answer.buffer_size = task_info->result_size;
+	}
+	bufferSize = __marshallMessage(&answer, buffer);
+	mcapi_msg_send(sendEP,
+		       recvEP,
+		       &buffer,
+		       bufferSize,
+		       MCAPI_MAX_PRIORITY,
+		       &mcapi_status);
+}
+
+/**
+ * This function updates the action status based on the information of 
+ * receiving message. Then the function will reply the message with the 
+ * local action information of this processor. This is used to keep 
+ * action information across domain consistent.
+ */
+void __lst_updateAction(mtapiRT_Message_t * message, mcapi_endpoint_t sendEP, mcapi_endpoint_t recvEP)
+{
+	int i;
+	mcapi_status_t mcapi_status;
+	mtapiRT_ActionUpdate_t * remoteUpdate;
+	mtapiRT_Message_t * msg;
+	unsigned send_size;
+	char buffer[MCAPI_MAX_MSG_SIZE];
+	mtapiRT_ActionInfo_t * tmp;
+	mcapi_endpoint_t remoteEndpt;
+	remoteUpdate = (mtapiRT_ActionUpdate_t* )message->buffer;
+	remoteEndpt = mcapi_endpoint_get(
+			NODE_INFOS[remoteUpdate->init_node].domain,
+			NODE_INFOS[remoteUpdate->init_node].node + 1,
+			NODE_INFOS[remoteUpdate->init_node].lst_recv_port,
+			MCAPI_TIMEOUT_INFINITE,
+		    	&mcapi_status 
+			);
+	for (i = 0; i < remoteUpdate->num_created_action; i++) {
+		tmp = __mtapi_jobs[remoteUpdate->job[i]].actions;
+		while (tmp != MTAPI_NULL) {
+			if (tmp->type == MTAPIRT_ACTION_LOCAL) {
+				tmp = tmp->next;
+			} else if (tmp->location.init_node == remoteUpdate->init_node) {
+				mutex_lock(&tmp->mutex);
+				tmp->status = MTAPIRT_ACTION_CREATED;
+				mutex_unlock(&tmp->mutex);
+				break;
+			} else {
+				tmp = tmp->next;
+			}
+		}
+	}
+
+	/* send back the local action information on this node */
+	mtapiRT_ActionUpdate_t * update;
+	int cnt = 0;
+	int j = 0;
+	update = (mtapiRT_ActionUpdate_t *) malloc (sizeof(mtapiRT_ActionUpdate_t));
+
+	for (i = 0; i < NODE_INFOS[__mtapi_init_node_id].num_actions; i++) {
+		if (__mtapi_actions[i].status == MTAPIRT_ACTION_CREATED) {
+			update->job[j++] = __mtapi_actions[i].jobID;
+			cnt++;
+		}
+	}
+	update->num_created_action = cnt;
+	update->init_node = __mtapi_init_node_id;
+
+
+        msg = (mtapiRT_Message_t *) malloc (sizeof(mtapiRT_Message_t));	
+	msg->type = MTAPIRT_MSG_UPDATE_ACTION_2;
+	msg->sender_domain = __mtapi_domain;
+	msg->sender_node = __mtapi_node;
+	msg->port = 0;
+	msg->buffer = (void *) update;
+	msg->buffer_size = sizeof(mtapiRT_ActionUpdate_t);
+	send_size = __marshallMessage(msg, buffer);
+	mcapi_msg_send(sendEP, remoteEndpt, &buffer, send_size, MCAPI_MAX_PRIORITY, &mcapi_status);
+
+}
+/**
+ * This function updates the action status based on information from 
+ * receiving message.
+ */
+void __lst_updateAction2(mtapiRT_Message_t * message, mcapi_endpoint_t sendEP, mcapi_endpoint_t recvEP)
+{
+	
+	int i;
+	mtapiRT_ActionUpdate_t * remoteUpdate;
+	mtapiRT_ActionInfo_t * tmp;
+	remoteUpdate = (mtapiRT_ActionUpdate_t* )message->buffer;
+	for (i = 0; i < remoteUpdate->num_created_action; i++) {
+		tmp = __mtapi_jobs[remoteUpdate->job[i]].actions;
+		while (tmp != MTAPI_NULL) {
+			if (tmp->type == MTAPIRT_ACTION_LOCAL) {
+				tmp = tmp->next;
+			} else if (tmp->location.init_node == remoteUpdate->init_node) {
+				mutex_lock(&tmp->mutex);
+				tmp->status = MTAPIRT_ACTION_CREATED;
+				mutex_unlock(&tmp->mutex);
+				break;
+			} else {
+				tmp = tmp->next;
+			}
+		}
+	}
+
+}
+/**
+ * This function will delete the action. 
+ */
+void __lst_updateActionDelete(mtapiRT_Message_t * message, mcapi_endpoint_t sendEP, mcapi_endpoint_t recvEP)
+{
+	int i;
+	mtapiRT_ActionUpdate_t * remoteUpdate;
+	mtapiRT_ActionInfo_t * tmp;
+	remoteUpdate = (mtapiRT_ActionUpdate_t* )message->buffer;
+	for (i = 0; i < remoteUpdate->num_created_action; i++) {
+		tmp = __mtapi_jobs[remoteUpdate->job[i]].actions;
+		while (tmp != MTAPI_NULL) {
+			if (tmp->type == MTAPIRT_ACTION_LOCAL) {
+				tmp = tmp->next;
+			} else if (tmp->location.init_node == remoteUpdate->init_node) {
+				mutex_lock(&tmp->mutex);
+				tmp->status = MTAPIRT_ACTION_DELETED;
+				mutex_unlock(&tmp->mutex);
+				break;
+			} else {
+				tmp = tmp->next;
+			}
+		}
+	}
+}
+/**
+ * This function copies the result of a task into the result_buffer. It is
+ * called when the processor receives result of a previous task from a 
+ * remote processor.
+ */
+void __lst_taskCompleted(mtapiRT_Message_t * message, mcapi_endpoint_t sendEP, mcapi_endpoint_t recvEP)
+{
+	/* find the task from __mtapi_remote_task_list */
+	/* remove node from __mtapi_remote_task_list */
+	/* copy from message->buffer to result->buffer*/
+	/* switch task->context->status */
+	unsigned external_id;
+	char buffer[MCAPI_MAX_MSG_SIZE];
+	unsigned send_size;
+	mtapi_status_t mtapi_status;
+	mtapiRT_Message_t * answer;
+	memcpy(&external_id, message->buffer, sizeof(unsigned));
+	unit_t * taskPtr;
+	mtapiRT_TaskInfo_t * task;
+	taskPtr = __mtapi_remote_task_list->head;
+	answer = (mtapiRT_Message_t *) malloc (sizeof(mtapiRT_Message_t));
+	answer->type = MTAPIRT_MSG_ACK;
+	answer->sender_domain = __mtapi_domain;
+	answer->sender_node = __mtapi_node;
+	answer->port = NODE_INFOS[__mtapi_init_node_id].lst_recv_port;
+	answer->buffer = MTAPI_NULL;
+	answer->buffer_size = 0;
+	send_size = __marshallMessage(answer, buffer);
+	while (taskPtr) {
+		task = (mtapiRT_TaskInfo_t *) taskPtr->ptr;
+		if (task->external_task_id == external_id) {
+			memcpy(task->result_buffer, &message->buffer[sizeof(unsigned)], message->buffer_size - sizeof(unsigned));
+			task->context->status = MTAPI_TASK_COMPLETED;
+			mutex_lock(&task->mutex);
+			task->action->running--;
+			mutex_unlock(&task->mutex);
+			__sync_fetch_and_add(&task->action->cnt, -1);
+			list_delete(__mtapi_remote_task_list, taskPtr);
+			mcapi_msg_send(sendEP, recvEP, &buffer, send_size, MCAPI_MAX_PRIORITY, &mtapi_status);
+			return;
+		}
+		taskPtr = taskPtr->next;
+		if (taskPtr == MTAPI_NULL) {
+			taskPtr = __mtapi_remote_task_list->head;
+		}
+	}
+}
+#ifdef __cplusplus
+  extern }
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

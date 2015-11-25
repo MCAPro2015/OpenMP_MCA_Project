@@ -1,0 +1,17 @@
+out2
+assignments[i] = 1
+assignments[i] = 1
+assignments[i] = 1
+assignments[i] = 2
+assignments[i] = 2
+assignments[i] = 2
+assignments[i] = 3
+assignments[i] = 3
+assignments[i] = 3
+assignments[i] = 3
+*****************   TRIAL 2 *************************
+tid2 sent from ep=1 to ep=0 msg: 2 3 9 16 25 36 49 64 81 100 121 144
+tid2 sent from ep=1 to ep=0 msg: 2 4 16 25 36 49 64 81 100 121 144 169
+tid2 sent from ep=1 to ep=0 msg: 2 5 25 36 49 64 81 100 121 144 169 196
+Finished Sending
+Closing
