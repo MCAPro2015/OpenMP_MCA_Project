@@ -1,0 +1,5 @@
+ERROR mca_set_debug_level : This library was built without debug support.
+  If you want to enable debugging, re-build with the --enable-debug option.
+run_thread tid=1run_thread tid=0sem exists, try getting it from the other nodeshmem exists, try getting it from the other nodeERROR: mrapi: sys_shmem_detach shmemdt() failed errno:Invalid argument
+ERROR: mrapi: sys_shmem_detach shmemdt() failed errno:Invalid argument
+   Test PASSED

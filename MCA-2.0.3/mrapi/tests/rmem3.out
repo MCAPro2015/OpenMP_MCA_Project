@@ -1,0 +1,5 @@
+run_thread tid=1
+run_thread tid=0
+tid=0 rmem_read read_buf=[scatter gather test!!!!]
+tid=1 rmem_read read_buf=[scatter gather test!!!!]
+   Test PASSED

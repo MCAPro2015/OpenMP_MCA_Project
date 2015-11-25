@@ -1,0 +1,18 @@
+ERROR mca_set_debug_level : This library was built without debug support.
+  If you want to enable debugging, re-build with the --enable-debug option.
+request 0 completed:
+request 1 completed:
+request 1 completed:
+request 1 completed:
+request 1 completed:
+endpoint=1 has sent: [0]
+endpoint=1 has received: [0]
+endpoint=1 has sent: [1]
+endpoint=1 has received: [1]
+endpoint=1 has sent: [2]
+endpoint=1 has received: [2]
+endpoint=1 has sent: [3]
+endpoint=1 has received: [3]
+endpoint=1 has sent: [4]
+endpoint=1 has received: [4]
+   Test PASSED

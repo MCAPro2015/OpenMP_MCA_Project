@@ -1,0 +1,7 @@
+alignment check1: x: 0x7FFFFC189F70
+alignment check1: y: 0x7FFFFC189F60
+alignment check1: x_na: 0x7FFFFC189F5E
+alignment check1: y_na: 0x7FFFFC189F5C
+alignment check3: buff: 0x8808100
+alignment check3: buff_na: 0x8808010
+   Test PASSED

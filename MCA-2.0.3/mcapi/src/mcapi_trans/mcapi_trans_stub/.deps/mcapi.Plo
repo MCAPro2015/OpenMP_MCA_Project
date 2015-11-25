@@ -1,0 +1,126 @@
+mcapi.lo: ../../../../mcapi/src/mcapi.c ../../../../mcapi/include/mcapi.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../lib/gcc/powerpc-linux-gnu/4.4.1/include/stddef.h \
+ ../../../../mca.h ../../../../mca_impl_spec.h mcapi_impl_spec.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/stdint.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/features.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/predefs.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/sys/cdefs.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/wordsize.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/gnu/stubs.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/gnu/stubs-32.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/wchar.h \
+ ../../../../mcapi/include/mcapi_trans.h ../../../../mca_config.h \
+ ../../../../common/mca_utils.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/pthread.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/endian.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/endian.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/byteswap.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/sched.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/types.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/typesizes.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/time.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/sched.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/time.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/xlocale.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/signal.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/sigset.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/pthreadtypes.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/setjmp.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../lib/gcc/powerpc-linux-gnu/4.4.1/include/stdarg.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/string.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/string.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/string2.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/stdlib.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/stdio.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/libio.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/_G_config.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/wchar.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/stdio_lim.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/sys_errlist.h \
+ /opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/stdio.h
+
+../../../../mcapi/include/mcapi.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../lib/gcc/powerpc-linux-gnu/4.4.1/include/stddef.h:
+
+../../../../mca.h:
+
+../../../../mca_impl_spec.h:
+
+mcapi_impl_spec.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/stdint.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/features.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/predefs.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/sys/cdefs.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/wordsize.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/gnu/stubs.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/gnu/stubs-32.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/wchar.h:
+
+../../../../mcapi/include/mcapi_trans.h:
+
+../../../../mca_config.h:
+
+../../../../common/mca_utils.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/pthread.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/endian.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/endian.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/byteswap.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/sched.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/types.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/typesizes.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/time.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/sched.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/time.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/xlocale.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/signal.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/sigset.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/pthreadtypes.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/setjmp.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../lib/gcc/powerpc-linux-gnu/4.4.1/include/stdarg.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/string.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/string.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/string2.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/stdlib.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/stdio.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/libio.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/_G_config.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/wchar.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/stdio_lim.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/sys_errlist.h:
+
+/opt/freescale/usr/local/gcc-4.4.78-eglibc-2.10.78-1/powerpc-linux-gnu/bin/../powerpc-linux-gnu/libc/usr/include/bits/stdio.h:

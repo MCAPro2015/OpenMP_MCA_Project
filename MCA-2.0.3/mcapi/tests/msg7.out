@@ -1,0 +1,93 @@
+ERROR mca_set_debug_level : This library was built without debug support.
+  If you want to enable debugging, re-build with the --enable-debug option.
+Using seed:[1367832304]
+issuing 4 sends...
+issuing 7 receives...
+issuing 1 receives...
+issuing 9 sends...
+issuing 5 sends...
+issuing 3 receives...
+issuing 10 receives...
+issuing 3 sends...
+issuing 10 sends...
+issuing 3 receives...
+issuing 8 receives...
+issuing 8 receives...
+issuing 8 sends...
+issuing 2 sends...
+issuing 5 sends...
+issuing 5 receives...
+issuing 6 receives...
+issuing 10 sends...
+issuing 4 receives...
+issuing 1 sends...
+issuing 1 sends...
+issuing 1 sends...
+issuing 1 sends...
+issuing 4 sends...
+issuing 5 receives...
+issuing 6 receives...
+success: sent: [Sending: 0], recvd: [Sending: 0]
+success: sent: [Sending: 1], recvd: [Sending: 1]
+success: sent: [Sending: 2], recvd: [Sending: 2]
+success: sent: [Sending: 3], recvd: [Sending: 3]
+success: sent: [Sending: 4], recvd: [Sending: 4]
+success: sent: [Sending: 5], recvd: [Sending: 5]
+success: sent: [Sending: 6], recvd: [Sending: 6]
+success: sent: [Sending: 7], recvd: [Sending: 7]
+success: sent: [Sending: 8], recvd: [Sending: 8]
+success: sent: [Sending: 9], recvd: [Sending: 9]
+success: sent: [Sending: 10], recvd: [Sending: 10]
+success: sent: [Sending: 11], recvd: [Sending: 11]
+success: sent: [Sending: 12], recvd: [Sending: 12]
+success: sent: [Sending: 13], recvd: [Sending: 13]
+success: sent: [Sending: 14], recvd: [Sending: 14]
+success: sent: [Sending: 15], recvd: [Sending: 15]
+success: sent: [Sending: 16], recvd: [Sending: 16]
+success: sent: [Sending: 17], recvd: [Sending: 17]
+success: sent: [Sending: 18], recvd: [Sending: 18]
+success: sent: [Sending: 19], recvd: [Sending: 19]
+success: sent: [Sending: 20], recvd: [Sending: 20]
+success: sent: [Sending: 21], recvd: [Sending: 21]
+success: sent: [Sending: 22], recvd: [Sending: 22]
+success: sent: [Sending: 23], recvd: [Sending: 23]
+success: sent: [Sending: 24], recvd: [Sending: 24]
+success: sent: [Sending: 25], recvd: [Sending: 25]
+success: sent: [Sending: 26], recvd: [Sending: 26]
+success: sent: [Sending: 27], recvd: [Sending: 27]
+success: sent: [Sending: 28], recvd: [Sending: 28]
+success: sent: [Sending: 29], recvd: [Sending: 29]
+success: sent: [Sending: 30], recvd: [Sending: 30]
+success: sent: [Sending: 31], recvd: [Sending: 31]
+success: sent: [Sending: 32], recvd: [Sending: 32]
+success: sent: [Sending: 33], recvd: [Sending: 33]
+success: sent: [Sending: 34], recvd: [Sending: 34]
+success: sent: [Sending: 35], recvd: [Sending: 35]
+success: sent: [Sending: 36], recvd: [Sending: 36]
+success: sent: [Sending: 37], recvd: [Sending: 37]
+success: sent: [Sending: 38], recvd: [Sending: 38]
+success: sent: [Sending: 39], recvd: [Sending: 39]
+success: sent: [Sending: 40], recvd: [Sending: 40]
+success: sent: [Sending: 41], recvd: [Sending: 41]
+success: sent: [Sending: 42], recvd: [Sending: 42]
+success: sent: [Sending: 43], recvd: [Sending: 43]
+success: sent: [Sending: 44], recvd: [Sending: 44]
+success: sent: [Sending: 45], recvd: [Sending: 45]
+success: sent: [Sending: 46], recvd: [Sending: 46]
+success: sent: [Sending: 47], recvd: [Sending: 47]
+success: sent: [Sending: 48], recvd: [Sending: 48]
+success: sent: [Sending: 49], recvd: [Sending: 49]
+success: sent: [Sending: 50], recvd: [Sending: 50]
+success: sent: [Sending: 51], recvd: [Sending: 51]
+success: sent: [Sending: 52], recvd: [Sending: 52]
+success: sent: [Sending: 53], recvd: [Sending: 53]
+success: sent: [Sending: 54], recvd: [Sending: 54]
+success: sent: [Sending: 55], recvd: [Sending: 55]
+success: sent: [Sending: 56], recvd: [Sending: 56]
+success: sent: [Sending: 57], recvd: [Sending: 57]
+success: sent: [Sending: 58], recvd: [Sending: 58]
+success: sent: [Sending: 59], recvd: [Sending: 59]
+success: sent: [Sending: 60], recvd: [Sending: 60]
+success: sent: [Sending: 61], recvd: [Sending: 61]
+success: sent: [Sending: 62], recvd: [Sending: 62]
+   Test PASSED
