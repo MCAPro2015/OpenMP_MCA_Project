@@ -1,0 +1,11 @@
+Compile script :
+powerpc-linux-gnu-gcc -g -O3 -te500v2 -shared -fpic -I/home/cwang/mca-build/include -L/home/cwang/mca-build/lib -Wl,-R/home/cwang/mca-build/lib -I. -lpthread -lmrapi -o libopenmp.so omp_rtl.c omp_util.c omp_user_runtime.c
+
+powerpc-linux-gnu-gcc -g -O3 -te500mc -shared -fpic -I/home/cwang/mca-build/include -L/home/cwang/mca-build/lib -Wl,-R/home/cwang/mca-build/lib -I. -lpthread -lmrapi -o libopenmp.so omp_rtl.c omp_util.c omp_user_runtime.c
+
+Copy it to your build path :cp libopenmp.so /home/cwang/opt/openuh-install/lib/gcc-lib/x86_64-open64-linux/4.2/libopenmp.so
+
+
+scp ./libopenmp.so root@129.7.242.229:~/lib/libopenmp.so
+
+scp -P 2222 libopenmp-mca.so  root@localhost:/home/root/lib/libopenmp.so

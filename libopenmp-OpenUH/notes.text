@@ -1,0 +1,32 @@
+compiling :
+gcc -shared -fpic -I/home/besar/mca-build/include -L/home/besar/mca-build/lib -Wl,-R/home/besar/mca-build/lib -lmrapi -o libopenmp-mca.so omp_rtl.c
+
+ID of a vthread : domainid,nodeid
+
+node --> execution unit
+list of team --> define what to do
+
+parallel region 1 --> nested --> nested :
+team->team1->team2
+
+we have a list the node based on the mca node id (mca node id != omp thread num)
+
+data structure hierarchy :
+list_nodes --> contains mca node
+	mca node
+		link list of omp team --> the most left team represents the root team
+			list of vthread of this team
+
+ex get thread num :
+	get current node == list_nodes[get_node_id()]
+		get the last team (from line 7 this means team2 that lies on level 2)
+			get the vthread (traverse array)
+
+
+
+By Cheng Wang
+
+modify omp_utl.c:1038 __ompc_barrier() --> __ompc_ebarrier()
+modify omp_utl.h:212  __ompc_barrier() --> __ompc_ebarrier()	
+modify omp_utl.c:31  add a new line
+modify omp_utl.h:67  add na new line 

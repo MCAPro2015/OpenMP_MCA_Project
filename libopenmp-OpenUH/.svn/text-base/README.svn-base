@@ -1,0 +1,5 @@
+Compile script :
+gcc -g -shared -fpic -I/home/besar/mca-build/include -L/home/besar/mca-build/lib -Wl,-R/home/besar/mca-build/lib -I. -lpthread -lmrapi -o libopenmp-mca.so omp_rtl.c omp_util.c omp_user_runtime.c
+
+Copy it to your build path :
+cp libopenmp-mca.so ~/OpenUH-git/lib/gcc-lib/x86_64-open64-linux/4.2/libopenmp.so
