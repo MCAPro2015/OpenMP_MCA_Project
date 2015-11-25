@@ -1,0 +1,10 @@
+To translate from C file to w2c.c file, use UHCC with command:
+uhcc -mp -CLIST:emit_nested_pu pathfinder_kernel.c
+note: Only the file with parallel code need to translate to w2c file before compiling, e.g. pathfinder_kernel.c
+
+To compile use "make"
+Command to run
+pathfiner width number_of_steps
+typical command: ./pathfinder 100000 100 > out
+./pathfinder_gcc 10000 100
+

@@ -1,0 +1,8 @@
+To translate from C file to w2c.c file, use UHCC with command to translate:
+uhcc -mp -CLIST:emit_nested_pu fourierf.c
+note: Only the file with parallel code needs to be translated into w2c file before compiling, e.g. fourier.c
+
+Command to run
+./fft 8 32768 > output_large.txt
+fft (number of nodes) (option to show result or not)
+

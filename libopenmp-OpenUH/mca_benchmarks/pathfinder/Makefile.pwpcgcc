@@ -1,0 +1,18 @@
+OBJ = pathfinder.o pathfinder_kernel.o 
+FILE = pathfinder.c pathfinder_kernel.c
+
+CC = powerpc-linux-gnu-gcc
+CFLAGS = -te500mc -O3 -std=c99
+LDFLAGS = -fopenmp
+C_INC = -I /home/pengsun86/opt/openuh-install/incpathfindere/4.2
+C_LIB = -L /home/pengsun86/mca-build/lib -L /home/pengsun86/opt/openuh-install/lib/gcc-lib/x86_64-open64-linux/4.2
+
+pathfinder: ${OBJ} Makefile
+	$(CC) ${CFLAGS} ${OBJ} $(LDFLAGS) -o pathfinder_pwpcgcc
+pathfinder.o: pathfinder.c
+	$(CC) ${CFLAGS} $(LDFLAGS) -c pathfinder.c
+pathfinder_kernel.o: pathfinder_kernel.c
+	$(CC) ${CFLAGS} $(LDFLAGS) -c pathfinder_kernel.c
+
+clean:
+	rm -rf *.o pathfinder_pwpcgcc output* #*.c *.h

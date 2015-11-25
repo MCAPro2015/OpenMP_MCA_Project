@@ -1,0 +1,17 @@
+#GCC Compiler
+CC = powerpc-linux-gnu-gcc
+CFLAGS = -std=c99 -O3 -te500mc
+LDFLAGS = -lm -fopenmp
+
+#Cross-compile
+#CC = powerpc-linux-gnu-gcc
+#CFLAGS= -O3 -te500v2
+#LDFLAGS= -lpthread -lm -lmrapi -lopenmp 
+#C_INC  = -I /home/cwang/opt/openuh-install/include/4.2 
+#C_LIB = -L /home/cwang/opt/openuh-install/lib/gcc-lib/x86_64-open64-linux/4.2 -L /home/cwang/mca-build/lib
+
+Dijkstra:
+	$(CC) ${CFLAGS} ${C_INC} $(LDFLAGS) $(C_LIB) Dijkstra.c -o Dijkstra_gcc	
+
+clean:
+	rm -rf *.o Dijkstra

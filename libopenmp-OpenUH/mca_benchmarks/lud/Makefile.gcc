@@ -1,0 +1,17 @@
+OBJ = lud.o lud_omp.o common.o
+FILE = lud.c lud_omp.c common.c
+
+CC = gcc
+CFLAGS = -std=c99 -O3 
+LDFLAGS = -fopenmp
+lud: ${OBJ} Makefile
+	$(CC) ${CFLAGS} ${OBJ} $(LDFLAGS) -o lud_gcc
+lud.o: lud.c
+	$(CC) ${CFLAGS} $(LDFLAGS) -c lud.c
+lud_omp.o: lud_omp.c
+	$(CC) ${CFLAGS} $(LDFLAGS) -c lud_omp.c
+common.o: common.c
+	$(CC) ${CFLAGS} $(LDFLAGS) -c common.c
+
+clean:
+	rm -rf *.o fft output* #*.w2c.c *.w2c.h

@@ -1,0 +1,15 @@
+OBJ = jacobi.o jacobi_kernel.o
+FILE = jacobi.c jacobi_kernel.c
+
+CC = gcc
+CFLAGS = -std=c99 -O3 -te500mc 
+LDFLAGS = -lm -fopenmp
+jacobi: ${OBJ} Makefile
+	$(CC) ${CFLAGS} ${OBJ} $(LDFLAGS) -o jacobi
+jacobi.o: jacobi.c
+	$(CC) ${CFLAGS} $(LDFLAGS) -c jacobi.c
+jacobi_kernel.o: jacobi_kernel.c
+	$(CC) ${CFLAGS} $(LDFLAGS) -c jacobi_kernel.c
+
+clean:
+	rm -rf *.o fft output* #*.w2c.c *.w2c.h

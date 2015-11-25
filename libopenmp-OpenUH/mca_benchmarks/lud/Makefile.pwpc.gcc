@@ -1,0 +1,20 @@
+OBJ = lud.o lud_omp.o common.o
+FILE = lud.c lud_omp.common.c
+
+CC = powerpc-linux-gnu-gcc
+CFLAGS = -te500mc -O3 -std=c99
+LDFLAGS = -fopenmp
+#C_INC = -I /home/pengsun86/opt/openuh-install/include/4.2
+#C_LIB = -L /home/pengsun86/mca-build/lib -L /home/pengsun86/opt/openuh-install/lib/gcc-lib/x86_64-open64-linux/4.2
+
+lud: ${OBJ} Makefile
+	$(CC) ${CFLAGS} ${OBJ} $(LDFLAGS) -o lud_gcc_w2c
+lud.o: lud.c
+	$(CC) ${CFLAGS} $(LDFLAGS) -c lud.c
+lud_omp.o: lud_omp.c
+	$(CC) ${CFLAGS} $(LDFLAGS) -c lud_omp.c
+common.o: common.c
+	$(CC) ${CFLAGS} $(LDFLAGS) -c common.c
+
+clean:
+	rm -rf *.o fft output* #*.c *.h

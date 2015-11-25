@@ -1,0 +1,12 @@
+#whirl2c last step
+CC = powerpc-linux-gnu-gcc 
+CFLAGS = -O3 -te500mc
+LDFLAGS = -lpthread -lm -lopenmp -lmrapi -te500mc
+C_INC  = -I /home/cwang/opt/openuh-install/include/4.2 
+C_LIB = -L /home/cwang/opt/openuh-install/lib/gcc-lib/x86_64-open64-linux/4.2 -L /home/cwang/mca-build/lib
+
+
+all:
+	${CC} ${CFLAGS} ${C_INC} omp_mm.w2c.c -o mm_mca ${LDFLAGS} ${C_LIB}
+clean : 
+	rm mm_mca *.o *.w2c.c *.w2c.h

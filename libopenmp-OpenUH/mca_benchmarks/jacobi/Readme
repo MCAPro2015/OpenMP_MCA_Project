@@ -1,0 +1,7 @@
+To translate from C file to w2c.c file, use UHCC with command:
+uhcc -mp -CLIST:emit_nested_pu jacobi_kernel.c
+note: Only the file with parallel code need to translate to w2c file before compiling, e.g. jacobi_kernel.c
+To compiler, use "make"
+
+Command to run
+./jacobi 10000

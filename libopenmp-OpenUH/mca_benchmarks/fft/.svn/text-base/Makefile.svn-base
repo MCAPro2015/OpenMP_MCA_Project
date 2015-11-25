@@ -1,0 +1,26 @@
+OBJ = main.o fftmisc.o  fourierf.w2c.o
+#FILE = main.c fftmisc.c  fourierf.w2c.c
+
+#GCC Compiler
+#CC = powerpc-linux-gnu-gcc
+#CFLAGS = -std=c99 -O3 -te500v2
+#LDFLAGS = -lm -fopenmp
+
+#Cross-compile
+CC = powerpc-linux-gnu-gcc
+CFLAGS= -O3 -te500v2
+LDFLAGS= -lpthread -lm -lmrapi -lopenmp 
+C_INC  = -I /home/cwang/opt/openuh-install/include/4.2 
+C_LIB = -L /home/cwang/opt/openuh-install/lib/gcc-lib/x86_64-open64-linux/4.2 -L /home/cwang/mca-build/lib
+
+fft: ${OBJ} Makefile
+	$(CC) ${CFLAGS} ${OBJ} $(LDFLAGS) $(C_LIB) -o fft
+fftmisc.o: 
+	$(CC) ${CFLAGS} $(C_INC) -c fftmisc.c
+fourierf.w2c.o: 
+	$(CC) ${CFLAGS} $(C_INC) -o fourierf.w2c.o -c fourierf.w2c.c
+main.o:
+	$(CC) ${CFLAGS} $(C_INC) -c main.c
+
+clean:
+	rm -rf *.o fft output* *.w2c.c *.w2c.h

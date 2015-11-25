@@ -1,0 +1,17 @@
+OBJ = main.o fftmisc.o  fourierf.o
+FILE = main.c fftmisc.c  fourierf.c
+
+CC = gcc
+CFLAGS = -std=c99 -O3 
+LDFLAGS = -lm -fopenmp
+fft: ${OBJ} Makefile
+	$(CC) ${CFLAGS} ${OBJ} $(LDFLAGS) -o fft
+fftmisc.o: fftmisc.c
+	$(CC) ${CFLAGS} $(LDFLAGS) -c fftmisc.c
+fourierf.o: fourierf.c
+	$(CC) ${CFLAGS} $(LDFLAGS) -c fourierf.c
+main.o: main.c
+	$(CC) ${CFLAGS} $(LDFLAGS) -c main.c
+
+clean:
+	rm -rf *.o fft output* *.w2c.c *.w2c.h

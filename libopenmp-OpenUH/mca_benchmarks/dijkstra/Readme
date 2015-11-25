@@ -1,0 +1,15 @@
+To translate from C file to w2c.c file, use UHCC with command:
+uhcc -mp -CLIST:emit_nested_pu Dijkstra.c
+note: Only the file with parallel code need to translate to w2c file before compiling, e.g. Dijkstra.c
+
+Command to run
+Dij_gcc (number of nodes) (option to show result or not)
+note: The number of nodes should be the nth of the number of threads
+The option 1 would print the result, while option 0 would not print out
+the results
+To run Dijkstra with 40 nodes and show the result,
+command should be: 
+./Dijkstra 40 1
+To run Dijkstra with 40 nodes but do not show the result,
+command should be:
+./Dijkstra 40 0

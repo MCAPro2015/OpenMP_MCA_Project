@@ -1,0 +1,7 @@
+To translate from C file to w2c.c file, use UHCC with command:
+uhcc -mp -CLIST:emit_nested_pu lud_omp.c
+note: Only the file with parallel code need to translate to w2c file before compiling, e.g. lud_omp.c
+To compiler, use "make"
+
+Command to run
+./lud_gcc -i 512.dat
