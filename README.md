@@ -13,8 +13,8 @@ The MCA-2.0.3 contains the referenced MCA implementation provided by the Multico
 
 The MTAPI folder contains the MTAPI implementation that follows the MTAPI specification 1.0.
 
-The OpenMP-MTAPI RTL folder includes the work of mapping OpenMP onto MTAPI RTL by providing the stand-alone OpenMP-MTAPI Runtime Library.
+The OpenMP-MTAPI RTL folder includes mapping of OpenMP to MTAPI RTL developing the OpenMP-MTAPI Runtime Library.
 
-The libopenmp-OpenUH contains the work that map the OpenMP runtime library onto MCA APIs, within the OpenUH context.
+The libopenmp-OpenUH consists of mapping OpenMP runtime library onto MCA APIs, within the OpenUH compiler.
 
-The folder on 'Papers' consists of publications associated with this project.
+The folder on 'Papers' consists of publications on this project, so far. 
