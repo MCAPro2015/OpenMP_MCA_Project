@@ -12,7 +12,7 @@ In this project we focus on developing a runtime system to explore mapping a hig
 
 By deploying the MCA API, our runtime is able to capture the characteristics of multicore embedded systems more efficiently than pthreads. Furthermore, the MCA layer enables our runtime implementation to be portable cross various architectures; devices of more than one type. As a result, programmers only need to write to OpenMP code once but will be able to reuse the code for more than platform, thus improving productivity. 
 
-This work is in association with MCA, Freescale, Siemens and OpenMP. 
+We would like to acknowledge the Multicore Association, Freescale Semiconductor, Siemens and OpenMP for their continued support. 
 
 The MCA-2.0.3 contains the referenced MCA implementation provided by the Multicore Association. 
 
