@@ -1,5 +1,6 @@
 #
 OpenMP_MCA_Project
+
 Led by Sunita Chandrasekaran (University of Delaware) and Barbara Chapman (University of Houston/Stony Brook University)
 Ph.D. Student: Peng Sun, Cheng Wang
 Masters Student: Suyang Zhu (Graudated in 2015 and currently with Microsoft) 
