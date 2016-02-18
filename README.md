@@ -22,4 +22,4 @@ The OpenMP-MTAPI RTL folder includes mapping of OpenMP to MTAPI RTL developing t
 
 The libopenmp-OpenUH consists of mapping OpenMP runtime library onto MCA APIs, within the OpenUH compiler.
 
-The folder on 'Papers' consists of publications on this project, so far. 
+Current list of publications on this work is available in the 'Papers' folder. 
