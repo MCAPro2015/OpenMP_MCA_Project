@@ -2,7 +2,8 @@
 OpenMP_MCA_Project
 
 Led by Sunita Chandrasekaran (University of Delaware) and Barbara Chapman (University of Houston/Stony Brook University)
-Ph.D. Student: Peng Sun, Cheng Wang
+
+Ph.D. Students: Peng Sun, Cheng Wang and
 Masters Student: Suyang Zhu (Graudated in 2015 and currently with Microsoft) 
 
 Multicore embedded systems are being widely used in telecommunication systems, robotics, medical applications and more. While such systems offer a high-performance with low-power solution, programming in an efficient way is still a challenge. In order to exploit the hardware potential of multicore embedded systems, software developers are still expected to handle many of the low-level details of programming including utilizing DMA, ensuring cache coherency, and inserting synchronization primitives explicitly; these issues are not only challenging to tackle but also time consuming and error-prone. Software portability is yet another issue. The state-of-the-art is towards using vendor-specific software toolchains that tightly couple the software to its designed hardware hence the portability is lost.
